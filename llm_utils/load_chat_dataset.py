@@ -1,5 +1,5 @@
 from speedy import load_by_ext
-from llm_data_utils.chat_format import identify_format, transform_messages, display_chat_messages_as_html
+from llm_utils.chat_format import identify_format, transform_messages, display_chat_messages_as_html
 
 def load_chat_dataset(path, current_format='auto', return_format='train_item'):
     assert return_format in ['train_item', 'chat_lm'], "The return format is not recognized. Please specify the return format."
