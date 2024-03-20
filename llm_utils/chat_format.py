@@ -1,4 +1,5 @@
 from IPython.core.display import HTML, Markdown, display
+from copy import deepcopy as deeopcopy
 
 
 def identify_format(item):
@@ -9,9 +10,10 @@ def identify_format(item):
             return 'train_item'
     raise ValueError(f"The format of the item is not recognized. \n{type(item)=}, \n{item=}")
 
-def transform_training_data_to_message_format(item, default_system_message="You are a helpful assistant.", print_msg=False):
-    if isinstance(item, list):
-        return [transform_training_data_to_message_format(item) for item in item]
+def _transform_train_item_to_chat_lm(item, default_system_message="You are a helpful assistant.", print_msg=False):
+    # if isinstance(item, list):
+        # return [_transform_train_item_to_chat_lm(item) for item in item]
+    assert isinstance(item, dict), "The item is not in the correct format. Please check the format of the item."
 
     messages = []
     system_msg = item.get("system", '')
@@ -27,46 +29,48 @@ def transform_training_data_to_message_format(item, default_system_message="You 
         messages.append({"role": role, "content": content})
 
     return messages
-from copy import deepcopy as deeopcopy
 
 def transform_messages(item, frm, to):
     item = deeopcopy(item)
     if frm != to:
         # convert item to chat_lm format
-        messages = normalize_messages_to_chat_format(item, input_format='auto')
+        messages = normalize_messages_to_chat_format(item, input_format=frm)
         if to == 'train_item':
             if messages[0]["role"] == "system":
                 system_message = messages[0]["content"]
-                ret = {"conversations": [], system_message: system_message}
+                ret = {"conversations": [], 'system': system_message.strip()}
                 for message in messages[1:]:
                     ret["conversations"].append({"from": message["role"], "value": message["content"]})
             else:
                 system_message = "You are a helpful assistant."
-                ret = {"conversations": [], system_message: system_message}
+                ret = {"conversations": [], 'system': system_message.strip()}
                 for message in messages:
                     ret["conversations"].append({"from": message["role"], "value": message["content"]})
             return ret
+        elif to == 'chat_lm':
+            return _transform_train_item_to_chat_lm(item)
+
 
     else:
         return item
 
 
-def normalize_messages_to_chat_format(messages, input_format='auto', log=False, assistant_prefix='', print_msg=False):
+def normalize_messages_to_chat_format(input_data, input_format='auto', log=False, assistant_prefix='', print_msg=False):
     if input_format == 'auto':
-        if isinstance(messages, list):
+        input_data = raw_data = deeopcopy(input_data)
+        if isinstance(input_data, list):
             input_format = 'chatlm'
-            assert messages[0].get("role") is not None, "The input format is not recognized. Please specify the input format."
-        elif isinstance(messages, dict):
-            messages = transform_training_data_to_message_format(messages)
+            assert input_data[0].get("role") is not None, "The input format is not recognized. Please specify the input format."
+        elif isinstance(input_data, dict):
+            input_data = _transform_train_item_to_chat_lm(input_data)
             input_format = 'train_item'
-        elif isinstance(messages, str):
+        elif isinstance(input_data, str):
             # assume it has format <|im_start|>role\n content<|im_end|> use regex to parse
-            assert '<|im_end|>' in messages, "The input format is not recognized. Please specify the input format."
+            assert '<|im_end|>' in input_data, "The input format is not recognized. Please specify the input format."
             input_format = 'chatlm'
-            # 1. split by <|im_end|>
-            parts = messages.split('<|im_end|>')
+            parts = input_data.split('<|im_end|>')
             # for each part, split by <|im_start|> to get role and content
-            messages = []
+            input_data = []
             for part in parts:
                 if not part.strip():
                     continue
@@ -75,10 +79,9 @@ def normalize_messages_to_chat_format(messages, input_format='auto', log=False, 
                 # content is after |>role\n
                 content = part.split(f'<|im_start|>{role}\n')[1]
                 content = content.split('<|im_end|>')[0]
+                input_data.append({"role": role.strip(), "content": content.strip()})
 
-                messages.append({"role": role.strip(), "content": content.strip()})
-
-    return messages
+    return input_data
 
 def create_prompt_from_messages(messages, input_format='auto', log=False, assistant_prefix='', print_msg=False):
     """
@@ -136,6 +139,12 @@ def display_chat_messages_as_html(messages, max_messages=10, theme='light', to_f
         content_safe = message['content'].replace('<', '&lt;').replace('>', '&gt;')
         # handle \n
         content_safe = content_safe.replace('\n', '<br>')
+        # handle spaces
+        content_safe = content_safe.replace('  ', '&nbsp;&nbsp;')
+        # handle tabs
+        content_safe = content_safe.replace('\t', '&nbsp;&nbsp;&nbsp;&nbsp;')
+        # handle multiple spaces
+        content_safe = content_safe.replace(' ', '&nbsp;')
                 
         html_content += f'<div style="background-color:{background_color}; margin:10px; padding:10px; border-radius:8px;">'
         html_content += f'<strong style="color:{text_color};">{message["role"].capitalize()}:</strong> <span style="color:{text_color};">{content_safe}</span>'
@@ -147,7 +156,7 @@ def display_chat_messages_as_html(messages, max_messages=10, theme='light', to_f
         with open(to_file, 'w') as f:
             f.write(html_content)
     return html_content
-    
+
 def generate_one_turn_chat_message(
     user_msg, system_msg=None, assistant_prefix=None, previous_conversation=None
 ):
