@@ -64,7 +64,7 @@ def transform_messages(item, frm='chatml', to='text', add_generation_prompt=True
         return item
 
 
-def transform_messages_to_chatml(input_data, input_format='auto', log=False, assistant_prefix='', print_msg=False):
+def transform_messages_to_chatml(input_data, input_format='auto'):
     if input_format == 'auto':
         input_data = raw_data = deeopcopy(input_data)
         if isinstance(input_data, list):
@@ -90,26 +90,6 @@ def transform_messages_to_chatml(input_data, input_format='auto', log=False, ass
                 input_data.append({"role": role.strip(), "content": content.strip()})
 
     return input_data
-
-def create_prompt_from_messages(messages, input_format='auto', log=False, assistant_prefix='', print_msg=False):
-    """
-        Returns:
-        - prompt: str (<|im_start|>role\n content<|im_end|>...<|im_start|>assistant\n{assistant_prefix})
-        - last_message: str
-    """
-    if messages[-1]["role"] == "assistant":
-        last_message = messages.pop()
-    else:
-        last_message = None
-
-    # Convert to prompt
-    prompt = ""
-    for message in messages:
-        role = message["role"]
-        content = message["content"]
-        prompt += f"<|im_start|>{role}\n {content}<|im_end|>\n"
-    prompt += '<|im_start|>assistant\n'+assistant_prefix
-    return prompt, last_message['content'] if last_message else None
 
 
 def display_chat_messages_as_html(data, theme='light', return_html=False):
@@ -290,3 +270,27 @@ def build_chatml_input(template: str, params: List[str]) -> Callable:
         msgs += [{'role': 'user', 'content': content}]
         return msgs
     return formator
+
+
+
+# tobe remove
+
+# def create_prompt_from_messages(messages, input_format='auto', log=False, assistant_prefix='', print_msg=False):
+#     """
+#         Returns:
+#         - prompt: str (<|im_start|>role\n content<|im_end|>...<|im_start|>assistant\n{assistant_prefix})
+#         - last_message: str
+#     """
+#     if messages[-1]["role"] == "assistant":
+#         last_message = messages.pop()
+#     else:
+#         last_message = None
+
+#     # Convert to prompt
+#     prompt = ""
+#     for message in messages:
+#         role = message["role"]
+#         content = message["content"]
+#         prompt += f"<|im_start|>{role}\n {content}<|im_end|>\n"
+#     prompt += '<|im_start|>assistant\n'+assistant_prefix
+#     return prompt, last_message['content'] if last_message else None
