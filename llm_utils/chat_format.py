@@ -4,15 +4,15 @@ from copy import deepcopy as deeopcopy
 
 def identify_format(item):
     if isinstance(item, list) and 'role' in item[0]:
-        return 'chat_lm'
+        return 'chatml'
     if isinstance(item, dict):
         if 'conversations' in item:
-            return 'train_item'
+            return 'sharegpt'
     raise ValueError(f"The format of the item is not recognized. \n{type(item)=}, \n{item=}")
 
-def _transform_train_item_to_chat_lm(item, default_system_message="You are a helpful assistant.", print_msg=False):
+def _transform_sharegpt_to_chatml(item, default_system_message="You are a helpful assistant.", print_msg=False):
     # if isinstance(item, list):
-        # return [_transform_train_item_to_chat_lm(item) for item in item]
+        # return [_transform_sharegpt_to_chatml(item) for item in item]
     assert isinstance(item, dict), "The item is not in the correct format. Please check the format of the item."
 
     messages = []
@@ -30,40 +30,49 @@ def _transform_train_item_to_chat_lm(item, default_system_message="You are a hel
 
     return messages
 
-def transform_messages(item, frm, to):
+def transform_messages(item, frm='chatml', to='text', add_generation_prompt=True):
+    assert to in ['chatml', 'text', 'sharegpt'], "The output format is not recognized. Please specify the output format."
     item = deeopcopy(item)
     if frm != to:
-        # convert item to chat_lm format
-        messages = normalize_messages_to_chat_format(item, input_format=frm)
-        if to == 'train_item':
-            if messages[0]["role"] == "system":
-                system_message = messages[0]["content"]
+        # convert item to chatml format
+        chatml_messages = transform_messages_to_chatml(item, input_format=frm)
+        if to == 'sharegpt':
+            if chatml_messages[0]["role"] == "system":
+                system_message = chatml_messages[0]["content"]
                 ret = {"conversations": [], 'system': system_message.strip()}
-                for message in messages[1:]:
+                for message in chatml_messages[1:]:
                     ret["conversations"].append({"from": message["role"], "value": message["content"]})
             else:
                 system_message = "You are a helpful assistant."
                 ret = {"conversations": [], 'system': system_message.strip()}
-                for message in messages:
+                for message in chatml_messages:
                     ret["conversations"].append({"from": message["role"], "value": message["content"]})
             return ret
-        elif to == 'chat_lm':
-            return _transform_train_item_to_chat_lm(item)
-
+        elif to == 'chatml':
+            return _transform_sharegpt_to_chatml(item)
+        elif to == 'text':
+            text = ''
+            for turn in chatml_messages:
+                text += f"<|im_start|>{turn['role']}\n{turn['content']}<|im_end|>\n"
+            if add_generation_prompt:
+                text += "<|im_start|>assistant\n"
+            return text
+        else:
+            raise ValueError(f"{to} is not supported.")
 
     else:
         return item
 
 
-def normalize_messages_to_chat_format(input_data, input_format='auto', log=False, assistant_prefix='', print_msg=False):
+def transform_messages_to_chatml(input_data, input_format='auto', log=False, assistant_prefix='', print_msg=False):
     if input_format == 'auto':
         input_data = raw_data = deeopcopy(input_data)
         if isinstance(input_data, list):
             input_format = 'chatlm'
             assert input_data[0].get("role") is not None, "The input format is not recognized. Please specify the input format."
         elif isinstance(input_data, dict):
-            input_data = _transform_train_item_to_chat_lm(input_data)
-            input_format = 'train_item'
+            input_data = _transform_sharegpt_to_chatml(input_data)
+            input_format = 'sharegpt'
         elif isinstance(input_data, str):
             # assume it has format <|im_start|>role\n content<|im_end|> use regex to parse
             assert '<|im_end|>' in input_data, "The input format is not recognized. Please specify the input format."
@@ -74,7 +83,6 @@ def normalize_messages_to_chat_format(input_data, input_format='auto', log=False
             for part in parts:
                 if not part.strip():
                     continue
-                # role is after <|im_start|> and before \n
                 role = part.split('<|im_start|>')[1].split('\n')[0]
                 # content is after |>role\n
                 content = part.split(f'<|im_start|>{role}\n')[1]
@@ -104,77 +112,181 @@ def create_prompt_from_messages(messages, input_format='auto', log=False, assist
     return prompt, last_message['content'] if last_message else None
 
 
+def display_chat_messages_as_html(data, theme='light', return_html=False):
+    if theme == 'light':
+        color_scheme = {
+            'system': {'background': '#FFAAAA', 'text': '#000000'},  # Light red background, black text
+            'user': {'background': '#AAFFAA', 'text': '#000000'},  # Light green background, black text
+            'assistant': {'background': '#AAAAFF', 'text': '#000000'},  # Light blue background, black text
+            'function': {'background': '#AFFFFF', 'text': '#000000'},  # Light yellow background, black text
+            'default': {'background': '#FFFFFF', 'text': '#000000'},  # White background, black text
+        }
+    else:  # For dark theme or other themes
+        color_scheme = {
+            'system': {'background': '#D9534F', 'text': '#FFFFFF'},  # Darker red background, white text
+            'user': {'background': '#5CB85C', 'text': '#FFFFFF'},  # Darker green background, white text
+            'assistant': {'background': '#5BC0DE', 'text': '#FFFFFF'},  # Darker blue background, white text
+            'function': {'background': '#F0AD4E', 'text': '#FFFFFF'},  # Darker yellow background, white text
+            'default': {'background': '#2C3E50', 'text': '#FFFFFF'},  # Dark slate background, white text
+        }
+
+    conversation_html = ""
+    for i, message in enumerate(data):
+        role = message['role']
+        content = message['content']
+
+        # Replace newlines with <br> tags
+        content = content.replace('\n', '<br>')
+
+        # Replace tabs with &nbsp; entities
+        content = content.replace('\t', '&nbsp;&nbsp;&nbsp;&nbsp;')
+
+        # Replace multiple consecutive spaces with &nbsp; entities
+        content = content.replace('  ', '&nbsp;&nbsp;')
+
+        if role in color_scheme:
+            background_color = color_scheme[role]['background']
+            text_color = color_scheme[role]['text']
+        else:
+            background_color = color_scheme['default']['background']
+            text_color = color_scheme['default']['text']
+
+        if role == 'system':
+            conversation_html += f'<div style="background-color: {background_color}; color: {text_color}; padding: 10px; margin-bottom: 10px;"><strong>System:</strong><br><pre id="system-{i}">{content}</pre><br><button onclick="copyContent(\'system-{i}\')">Copy</button></div>'
+        elif role == 'user':
+            conversation_html += f'<div style="background-color: {background_color}; color: {text_color}; padding: 10px; margin-bottom: 10px;"><strong>User:</strong><br><pre id="user-{i}">{content}</pre><br><button onclick="copyContent(\'user-{i}\')">Copy</button></div>'
+        elif role == 'assistant':
+            conversation_html += f'<div style="background-color: {background_color}; color: {text_color}; padding: 10px; margin-bottom: 10px;"><strong>Assistant:</strong><br><pre id="assistant-{i}">{content}</pre><br><button onclick="copyContent(\'assistant-{i}\')">Copy</button></div>'
+
+    html = f'''
+    <html>
+    <head>
+        <style>
+            pre {{
+                white-space: pre-wrap;
+            }}
+        </style>
+    </head>
+    <body>
+        {conversation_html}
+        <script>
+            function copyContent(elementId) {{
+                var element = document.getElementById(elementId);
+                var text = element.innerText;
+                navigator.clipboard.writeText(text)
+                    .then(function() {{
+                        alert("Content copied to clipboard!");
+                    }})
+                    .catch(function(error) {{
+                        console.error("Error copying content: ", error);
+                    }});
+            }}
+        </script>
+    </body>
+    </html>
+    '''
+    if return_html:
+        return html
+    else:
+        display(HTML(html))
 
 
-def display_chat_messages_as_html(messages, max_messages=10, theme='light', to_file='/tmp/chat.html'):
-    messages = normalize_messages_to_chat_format(messages)
-    num_trimmed = len(messages) - max_messages
 
-    html_content = '<div style="font-family: Arial, sans-serif;">'
-    if num_trimmed > 0:
-        html_content += f'<p style="color:#FFAAAA;">({num_trimmed} messages trimmed...)</p>'
-    for message in messages[-max_messages:]:
-
-        if theme == 'light':
-            color_scheme = {
-                'system': {'background': '#FFAAAA', 'text': '#000000'},  # Light red background, black text
-                'user': {'background': '#AAFFAA', 'text': '#000000'},  # Light green background, black text
-                'assistant': {'background': '#AAAAFF', 'text': '#000000'},  # Light blue background, black text
-                'function': {'background': '#AFFFFF', 'text': '#000000'},  # Light yellow background, black text
-                'default': {'background': '#FFFFFF', 'text': '#000000'},  # White background, black text
-            }
-        else:  # For dark theme or other themes
-            color_scheme = {
-                'system': {'background': '#D9534F', 'text': '#FFFFFF'},  # Darker red background, white text
-                'user': {'background': '#5CB85C', 'text': '#FFFFFF'},  # Darker green background, white text
-                'assistant': {'background': '#5BC0DE', 'text': '#FFFFFF'},  # Darker blue background, white text
-                'function': {'background': '#F0AD4E', 'text': '#FFFFFF'},  # Darker yellow background, white text
-                'default': {'background': '#2C3E50', 'text': '#FFFFFF'},  # Dark slate background, white text
-            }
-
-        # Extract both background and text colors based on the role
-        background_color = color_scheme.get(message['role'], color_scheme['default'])['background']
-        text_color = color_scheme.get(message['role'], color_scheme['default'])['text']
-
-        content_safe = message['content'].replace('<', '&lt;').replace('>', '&gt;')
-        # handle \n
-        content_safe = content_safe.replace('\n', '<br>')
-        # handle spaces
-        content_safe = content_safe.replace('  ', '&nbsp;&nbsp;')
-        # handle tabs
-        content_safe = content_safe.replace('\t', '&nbsp;&nbsp;&nbsp;&nbsp;')
-        # handle multiple spaces
-        content_safe = content_safe.replace(' ', '&nbsp;')
-                
-        html_content += f'<div style="background-color:{background_color}; margin:10px; padding:10px; border-radius:8px;">'
-        html_content += f'<strong style="color:{text_color};">{message["role"].capitalize()}:</strong> <span style="color:{text_color};">{content_safe}</span>'
-        html_content += '</div>'
-
-    html_content += '</div>'
-    display(HTML(html_content))
-    if to_file:
-        with open(to_file, 'w') as f:
-            f.write(html_content)
-    return html_content
-
-def generate_one_turn_chat_message(
-    user_msg, system_msg=None, assistant_prefix=None, previous_conversation=None
-):
-    _mesages = []
+def get_conversation_one_turn(system_msg=None, user_msg=None, assistant_msg=None, assistant_prefix=None, return_format='chatml'):
+    messages = []
     if system_msg:
-        _mesages.append({"role": "system", "content": system_msg})
-    _mesages.append({"role": "user", "content": user_msg})
+        messages.append({'role':'system', 'content': system_msg})
+    messages.append({'role': 'user', 'content': user_msg})
+    if assistant_msg:
+        messages.append({'role': 'assistant', 'content': assistant_msg})
+    if assistant_prefix is not None:
+        assert return_format != 'chatml', "Change return_format to 'text' if you want to use assistant_prefix"
+        assert messages[-1]['role'] == 'user'
+        msg = transform_messages(messages, "chatml", "text", add_generation_prompt=True)
+        msg += assistant_prefix
+        return msg
+    else:
+        assert return_format in ['chatml']
+        return messages
+from difflib import ndiff
+from IPython.display import HTML
 
-    text = ''
-    for turn in _mesages:
-        # if turn["role"] == "user":
-        turn["content"] = turn["content"].strip()
-        text += '<|im_start|>{role}\n{content}<|im_end|>\n'.format(**turn)
-    text += '<|im_start|>assistant\n'
-    if assistant_prefix:
-        text += assistant_prefix
-    if previous_conversation:
-        if not previous_conversation.endswith("\n"):
-            previous_conversation += "\n"
-        text = previous_conversation + text
-    return text
+def display_diff_two_string(text1, text2):
+    # Split the texts into lines
+    lines1 = text1.splitlines()
+    lines2 = text2.splitlines()
+
+    # Perform the diff
+    diff = list(ndiff(lines1, lines2))
+
+    # Create the HTML table
+    table_rows = []
+    for line in diff:
+        if line.startswith('- '):
+            table_rows.append(f'<tr><td style="background-color: #FFCCCB;">{line[2:]}</td><td></td></tr>')
+        elif line.startswith('+ '):
+            table_rows.append(f'<tr><td></td><td style="background-color: #CCFFCC;">{line[2:]}</td></tr>')
+        elif line.startswith('? '):
+            continue
+        else:
+            table_rows.append(f'<tr><td>{line}</td><td>{line}</td></tr>')
+
+    table_html = '<table style="width: 100%; border-collapse: collapse;">'
+    table_html += '<tr><th style="width: 50%; text-align: left;">Text 1</th><th style="width: 50%; text-align: left;">Text 2</th></tr>'
+    table_html += ''.join(table_rows)
+    table_html += '</table>'
+
+    # Display the HTML table
+    display(HTML(table_html))
+    
+def display_conversations(data1, data2, theme='light'):
+    html1 = display_chat_messages_as_html(data1, theme)
+    html2 = display_chat_messages_as_html(data2, theme)
+
+    html = f'''
+    <html>
+    <head>
+        <style>
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+            }}
+            td {{
+                width: 50%;
+                vertical-align: top;
+                padding: 10px;
+            }}
+        </style>
+    </head>
+    <body>
+        <table>
+            <tr>
+                <td>{html1}</td>
+                <td>{html2}</td>
+            </tr>
+        </table>
+    </body>
+    </html>
+    '''
+    display(HTML(html))
+
+from typing import List, Dict, Callable
+
+def build_chatml_input(template: str, params: List[str]) -> Callable:
+    def formator(**kwargs) -> List[List[Dict[str, str]]]:
+        system_msg = kwargs.get('system_msg', None)
+        # remove system 
+        kwargs.pop('system_msg', None)
+        # Ensure all required parameters are present in kwargs
+        for param in params:
+            if param not in kwargs:
+                raise ValueError(f"Missing parameter: {param}")
+
+        # Use the **kwargs directly in the format method
+        content = template.format(**kwargs)
+        msgs = []
+        if system_msg:
+            msgs += [{'role': 'system', 'content': system_msg}]
+        msgs += [{'role': 'user', 'content': content}]
+        return msgs
+    return formator
