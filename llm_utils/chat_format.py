@@ -31,7 +31,7 @@ def _transform_sharegpt_to_chatml(item, default_system_message="You are a helpfu
     return messages
 
 def transform_messages(item, frm='chatml', to='text', add_generation_prompt=True):
-    assert to in ['chatml', 'text', 'sharegpt'], "The output format is not recognized. Please specify the output format."
+    assert to in ['chatml', 'text', 'sharegpt', 'simulated_chat'], "The output format is not recognized. Please specify the output format."
     item = deeopcopy(item)
     if frm != to:
         # convert item to chatml format
@@ -56,6 +56,14 @@ def transform_messages(item, frm='chatml', to='text', add_generation_prompt=True
                 text += f"<|im_start|>{turn['role']}\n{turn['content']}<|im_end|>\n"
             if add_generation_prompt:
                 text += "<|im_start|>assistant\n"
+            return text
+        elif to == 'simulated_chat':
+            text = '<role> Given the simulated chat, you are the assistant. Lets continue the conversation. \n\n'
+            for turn in chatml_messages:
+                prefix = {'user': 'Human', 'assistant': 'AI', 'system': 'System', 'function': 'Function'}.get(turn['role'])
+                text += f"{prefix}: {turn['content'].strip()}\n\n"
+            if add_generation_prompt:
+                text += "AI: [continue the conversation here]"
             return text
         else:
             raise ValueError(f"{to} is not supported.")
@@ -123,6 +131,12 @@ def display_chat_messages_as_html(data, theme='light', return_html=False):
 
         # Replace multiple consecutive spaces with &nbsp; entities
         content = content.replace('  ', '&nbsp;&nbsp;')
+        # keep html tag without escaping
+        # content = content.replace('&lt;', '<')
+
+        content = content.replace('<br>', 'TEMP_BR').replace('<', '&lt;').replace('>', '&gt;').replace('TEMP_BR', '<br>')
+
+
 
         if role in color_scheme:
             background_color = color_scheme[role]['background']
