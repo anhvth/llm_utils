@@ -9,7 +9,7 @@ from glob import glob
 from pydantic import BaseModel, create_model
 import json
 from typing import Type
-
+from llm_utils import extract_json
 CACHE_DIR = os.path.expanduser("~/.cache/llm_classifier")
 logger.info(f'LLM_CLASSIFIER_CACHE_DIR: {CACHE_DIR}')
 
@@ -44,10 +44,7 @@ def load_schema(path: str) -> Type[BaseModel]:
                 for name, field_info in schema.get('properties', {}).items()}
     return create_model(model_name, **fields)
 
-def extract_json(content, is_list=False):
-    l = content.find('{') if not is_list else content.find('[')
-    r = content.rfind('}')+1 if not is_list else content.rfind(']')+1
-    return json.loads(content[l:r])
+
 
 LABEL_BY_PRIORITY = ['human', 'gpt4', 'gpt3']
 
@@ -115,7 +112,7 @@ class LLMWraper:
 
 class BaseExtractor:
     def __init__(self, msgs_forward_fn:callable, task_description: str,
-                examples: list[Example|str], pydantic_response: BaseModel, 
+                examples: list, pydantic_response: BaseModel, 
                 classifier_path, note: str = None, max_examples=10):
         self.classifier_path = classifier_path
         
@@ -298,19 +295,19 @@ You have access to the following functions to update the current system prompt:
 
     def update(self):
         on_memory_examples = self.examples
-        data = load_by_ext(self.classifier_path)
-        on_disk_examples = data['examples']
-        print(data.keys())
-        task_description = data['task_description']
-        # assert self.task_description == task_description, f'Task description does not match: {self.task_description} != {task_description}'
-        if task_description != self.task_description:
-            logger.warning(f'Task description does not match with the on-disk task description: {self.task_description} != {task_description}')
-            self.task_description = task_description
-        on_disk_examples = [Example(**example) for example in on_disk_examples]
-        examples = merge_examples(on_memory_examples, on_disk_examples)
-        self.examples = examples
-        self.system_msg = self._create_system_msg()
-        self.stats()
+        if os.path.exists(self.classifier_path):
+            data = load_by_ext(self.classifier_path)
+            on_disk_examples = data['examples']
+            print(data.keys())
+            task_description = data['task_description']
+            if task_description != self.task_description:
+                logger.warning(f'Task description does not match with the on-disk task description: {self.task_description} != {task_description}')
+                self.task_description = task_description
+            on_disk_examples = [Example(**example) for example in on_disk_examples]
+            examples = merge_examples(on_memory_examples, on_disk_examples)
+            self.examples = examples
+            self.system_msg = self._create_system_msg()
+            self.stats()
 
     def persis(self):
         self.examples = [example.model_dump_json() for example in self.examples]
@@ -338,6 +335,8 @@ The input provided by the user will be an enumerated list. Please process each i
         return system_msg
 
     def __call__(self, input_data: list[str], hint=None, return_examples=True):
+        if isinstance(input_data, str):
+            input_data = [input_data]
         user_msg = "Please process the following list of inputs:\n"
         for i, item in enumerate(input_data, start=1):
             user_msg += f"input_id: {i}. {item}\n"

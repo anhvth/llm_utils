@@ -30,9 +30,19 @@ def _transform_sharegpt_to_chatml(item, default_system_message="You are a helpfu
 
     return messages
 
-def transform_messages(item, frm='chatml', to='text', add_generation_prompt=True):
+def transform_messages(item, frm='chatml', to='text', add_generation_prompt=True, tokenizer=None, assistant_prefix=None):
     assert to in ['chatml', 'text', 'sharegpt', 'simulated_chat'], "The output format is not recognized. Please specify the output format."
     item = deeopcopy(item)
+    
+    
+    if tokenizer is not None:
+        assert frm == 'chatml', "Tokenizer is only supported for chatml format."
+        prompt = tokenizer.apply_chat_template(item, tokenize=False, add_generation_prompt=True)
+        assert isinstance(prompt, str), "Prompt must be a string."
+        if assistant_prefix:
+            prompt += f"{assistant_prefix}"
+        return prompt
+
     if frm != to:
         # convert item to chatml format
         chatml_messages = transform_messages_to_chatml(item, input_format=frm)
