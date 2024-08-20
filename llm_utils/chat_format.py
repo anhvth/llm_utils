@@ -1,6 +1,6 @@
 from IPython.core.display import HTML, Markdown, display
 from copy import deepcopy as deeopcopy
-
+from loguru import logger
 
 def identify_format(item):
     if isinstance(item, list) and 'role' in item[0]:
@@ -161,6 +161,13 @@ def display_chat_messages_as_html(data, theme='light', return_html=False):
             conversation_html += f'<div style="background-color: {background_color}; color: {text_color}; padding: 10px; margin-bottom: 10px;"><strong>User:</strong><br><pre id="user-{i}">{content}</pre><br><button onclick="copyContent(\'user-{i}\')">Copy</button></div>'
         elif role == 'assistant':
             conversation_html += f'<div style="background-color: {background_color}; color: {text_color}; padding: 10px; margin-bottom: 10px;"><strong>Assistant:</strong><br><pre id="assistant-{i}">{content}</pre><br><button onclick="copyContent(\'assistant-{i}\')">Copy</button></div>'
+        elif role == 'function':
+            conversation_html += f'<div style="background-color: {background_color}; color: {text_color}; padding: 10px; margin-bottom: 10px;"><strong>Function:</strong><br><pre id="function-{i}">{content}</pre><br><button onclick="copyContent(\'function-{i}\')">Copy</button></div>'
+            # Add a copy button for each message
+        else:
+            
+            logger.warning(f"Unknown role: {role}")
+            conversation_html += f'<div style="background-color: {background_color}; color: {text_color}; padding: 10px; margin-bottom: 10px;"><strong>{role}:</strong><br><pre id="{role}-{i}">{content}</pre><br><button onclick="copyContent(\'{role}-{i}\')">Copy</button></div>'
 
     html = f'''
     <html>
