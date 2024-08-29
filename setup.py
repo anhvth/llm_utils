@@ -2,7 +2,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="llm_data_utils",
+    name="llm_utils",
     version="0.1.0",
     author="AnhVTH",
     author_email="anhvth.226@gmail.com",
