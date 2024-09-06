@@ -1,6 +1,3 @@
-from langchain_core.prompts import PromptTemplate
-from langchain_openai import ChatOpenAI
-from langchain_core.output_parsers import JsonOutputParser
 
 meta_prompt = '''Today you will be writing instructions to an eager, helpful, but inexperienced and unworldly AI assistant who needs careful instruction and examples to understand how best to behave. I will explain a task to you. You will write instructions that will direct the assistant on how best to accomplish the task consistently, accurately, and correctly. Here are some examples of tasks and instructions.
 
@@ -464,36 +461,96 @@ Note: If the task is particularly complicated, you may wish to instruct the AI t
 Note: If the task is particularly complicated, you may wish to instruct the AI to think things out beforehand in scratchpad or inner monologue XML tags before it gives its final answer. For simple tasks, omit this.
 Note: If you want the AI to output its entire response or parts of its response inside certain tags, specify the name of these tags (e.g. "write your answer inside <answer> tags") but do not include closing tags or unnecessary open-and-close tag sections.'''
 
-import OpenAI
+from openai import OpenAI
 from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
+from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import JsonOutputParser
+from loguru import logger
+def get_prompt_template(
+    task: str,
+    input_variables: list[str] = [],
+    max_tokens: int = 4096,
+    model: str = 'gpt-4o',
+    kwargs_openai: dict = {},
+    to_langchain: bool = False,
+    verbose: bool = False
+) -> str:
+    """
+    Returns a prompt template for the given task and input variables.
 
-def get_prompt_template(task, input_variables=[], max_tokens=4096, model='gpt-4o', kwargs_openai={}, to_langchain=False):
-    client = OpenAI(timeout=60)
-    prompt = meta_prompt.replace("{{TASK}}", task)
+    Args:
+        task (str): The task to be performed.
+        input_variables (list[str]): A list of input variable names. Defaults to an empty list.
+        max_tokens (int): The maximum number of tokens in the response. Defaults to 4096.
+        model (str): The AI model to use for generating responses. Defaults to 'gpt-4o'.
+        kwargs_openai (dict): Additional keyword arguments for the OpenAI client. Defaults to an empty dictionary.
+        to_langchain (bool): Whether to convert the prompt template to a LangChain PromptTemplate object. Defaults to False.
+        verbose (bool): Whether to display chat messages as HTML. Defaults to False.
 
-    assistant_partial = "<Inputs>"
-    if input_variables:
-        assistant_partial += ', '.join(input_variables) + "\n</Inputs><Instructions Structure>"
+    Returns:
+        str: The prompt template or a LangChain PromptTemplate object if `to_langchain` is True.
+    """
 
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {
-                "role": "user",
-                "content":  prompt 
-            },
-            {
-                "role": "assistant",
-                 "content": assistant_partial
-            }
-        ],
-        temperature=0.0,
-        max_tokens=max_tokens,
-        **kwargs_openai,
+    # Convert input variable names to uppercase
+    input_variables = [variable.upper() for variable in input_variables]
+
+    # Create a string of input variables
+    variable_string = "\n".join(
+        "{" + variable + "}" for variable in input_variables
     )
 
+    # Initialize the OpenAI client with a timeout of 60 seconds
+    client = OpenAI(timeout=60)
+
+    # Prepare the prompt and assistant messages
+    prompt = meta_prompt.replace("{{TASK}}", task)
+    assistant_partial = "<Inputs>"
+    if variable_string:
+        assistant_partial += variable_string + "\n</Inputs><Instructions Structure>"
+
+    # Create a list of messages for the OpenAI client
+    messages = [
+        {"role": "user", "content": prompt},
+        {"role": "assistant", "content": assistant_partial}
+    ]
+
+    # Get the response from the OpenAI client
+    response = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        temperature=0.0,
+        max_tokens=max_tokens,
+        **kwargs_openai
+    )
+
+    # Extract the instructions from the response
     instructions = response.choices[0].message.content
+
+    # Display chat messages as HTML if verbose mode is enabled
+    if verbose:
+        try:
+            from llm_utils import display_chat_messages_as_html
+            display_chat_messages_as_html(
+                messages + [{"role": "assistant", "content": instructions}]
+            )
+        except ImportError:
+            print("llm_utils module not found. Skipping chat message display.")
+
+    # Split the instructions into structure and content
+    structure, instructions = instructions.split("</Instructions Structure>")
+    instructions = instructions.strip()
+
+    # Create a LangChain PromptTemplate object if requested
     if to_langchain:
-        return PromptTemplate(template=prompt + '\n' + instructions, input_variables=input_variables)
-    else:
-        return instructions
+        _langchain_template = PromptTemplate(
+            template=instructions, input_variables=input_variables
+        )
+        for variable in _langchain_template.input_variables:
+            if variable not in input_variables:
+                logger.warning(f"{variable=} is in the template but was not requested")
+
+        return _langchain_template
+
+    # Return the prompt template as a string
+    return instructions
