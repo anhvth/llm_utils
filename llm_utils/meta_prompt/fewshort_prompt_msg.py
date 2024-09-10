@@ -7,14 +7,20 @@ import json
 from langchain_core.prompts.chat import MessageLikeRepresentation
 from langchain_core.pydantic_v1 import BaseModel as BaseModelV1
 from typing import List, Dict, Tuple, Sequence
-from llm_utils import get_langchain_openai_model
+
 from langchain.output_parsers import PydanticOutputParser
 
 
+class Example(BaseModelV1):
+    human: str
+    ai: str
+
+
 def get_few_shot_prompt(
-    examples_human_ai_pairs,
+    examples_human_ai_pairs: List[Example],
     system_message: str = "",
     format_inst="",
+    ai_prefix="",
 ) -> ChatPromptTemplate:
 
     # assert len(examples_human_ai_pairs) > 0
@@ -38,27 +44,25 @@ def get_few_shot_prompt(
         msgs.append(("system", system_message))
     few_shot_messages = []
     for example in examples_human_ai_pairs:
-        if isinstance(example, tuple):
-            role, msg = example
-            role = HumanMessage if role == "human" else AIMessage
-            msgs.append(role(msg))
-
-        else:
-            human_message = example["human"]
-            ai_message = example["ai"]
-            msgs.append(HumanMessage(human_message))
-            msgs.append(AIMessage(json.dumps(ai_message, indent=2)))
+        msgs.append(HumanMessage(example.human))
+        msgs.append(AIMessage(example.ai))
 
     msgs.extend(few_shot_messages)
     if format_inst:
         msgs.append(("system", format_inst))
     msgs.append(("human", "{input}"))
+    if ai_prefix:
+        msgs.append(("ai", ai_prefix))
     final_prompt = ChatPromptTemplate.from_messages(msgs)
     return final_prompt
 
 
 def generate_pydantic_parse_chain(
-    examples, pydantic_output_model=None, model="gpt-4o-mini", system_message=""
+    examples: List[Example],
+    pydantic_output_model=None,
+    model="gpt-4o-mini",
+    system_message="",
+    ai_prefix="",
 ):
     if pydantic_output_model is None:
         format_inst = ""
@@ -69,6 +73,10 @@ def generate_pydantic_parse_chain(
         format_inst = (
             parser.get_format_instructions().replace("{", "{{").replace("}", "}}")
         )
-    prompt = get_few_shot_prompt(examples, system_message, format_inst)
+    prompt = get_few_shot_prompt(
+        examples, system_message, format_inst, ai_prefix=ai_prefix
+    )
+    from ._generate_prompt import get_langchain_openai_model
+
     model = get_langchain_openai_model(model)
     return prompt, model, parser

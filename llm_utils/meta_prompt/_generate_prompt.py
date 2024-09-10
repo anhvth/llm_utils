@@ -561,7 +561,8 @@ def get_prompt_template(
         # assert (
         #     len(missing_variables) == 0
         # ), f"Missing input variables: {', '.join(missing_variables)}"
-        logger.warning(f"Missing input variables: {', '.join(missing_variables)}")
+        if len(missing_variables) > 0:
+            logger.warning(f"Missing input variables: {', '.join(missing_variables)}")
     return _langchain_template
 
 def get_langchain_openai_model(model: Union[str, ChatOpenAI], **kwargs) -> ChatOpenAI:
