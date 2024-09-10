@@ -18,4 +18,6 @@ __all__ = [
     "generate_program_json",
 ]
 
+__all__.extend(chat_format.__all__)
 __all__.extend(text_utils.__all__)
+__all__.extend(meta_prompt.__all__)

@@ -525,7 +525,7 @@ def get_prompt_template(
         temperature=0.0,
         max_tokens=max_tokens,
         **kwargs_openai,
-    )
+    ) # type: ignore
 
     # Extract the instructions from the response
     instructions = response.choices[0].message.content

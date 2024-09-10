@@ -4,7 +4,7 @@ import os
 
 def get_program_examples():
     dir_path = os.path.dirname(os.path.abspath(__file__))
-    examples = open(os.path.join(dir_path, "examples_program.txt")).read()
+    examples = open(os.path.join(dir_path, "prompts/example_python_prgrams.txt")).read()
     return examples
 
 
