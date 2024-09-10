@@ -1,5 +1,4 @@
-
-meta_prompt = '''Today you will be writing instructions to an eager, helpful, but inexperienced and unworldly AI assistant who needs careful instruction and examples to understand how best to behave. I will explain a task to you. You will write instructions that will direct the assistant on how best to accomplish the task consistently, accurately, and correctly. Here are some examples of tasks and instructions.
+meta_prompt = """Today you will be writing instructions to an eager, helpful, but inexperienced and unworldly AI assistant who needs careful instruction and examples to understand how best to behave. I will explain a task to you. You will write instructions that will direct the assistant on how best to accomplish the task consistently, accurately, and correctly. Here are some examples of tasks and instructions.
 
 <Task Instruction Example>
 <Task>
@@ -459,7 +458,10 @@ Note: Another name for what you are writing is a "prompt template". When you put
 Note: When instructing the AI to provide an output (e.g. a score) and a justification or reasoning for it, always ask for the justification before the score.
 Note: If the task is particularly complicated, you may wish to instruct the AI to think things out beforehand in scratchpad or inner monologue XML tags before it gives its final answer. For simple tasks, omit this.
 Note: If the task is particularly complicated, you may wish to instruct the AI to think things out beforehand in scratchpad or inner monologue XML tags before it gives its final answer. For simple tasks, omit this.
-Note: If you want the AI to output its entire response or parts of its response inside certain tags, specify the name of these tags (e.g. "write your answer inside <answer> tags") but do not include closing tags or unnecessary open-and-close tag sections.'''
+Note: If you want the AI to output its entire response or parts of its response inside certain tags, specify the name of these tags (e.g. "write your answer inside <answer> tags") but do not include closing tags or unnecessary open-and-close tag sections.
+Note: For input variables, you must use single curly braces {}. Make sure the list of <Inputs> variables matches the list of input variables in the <Instructions> section.
+"""
+
 
 from openai import OpenAI
 from langchain.prompts import PromptTemplate
@@ -467,15 +469,18 @@ from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import JsonOutputParser
 from loguru import logger
+from typing import Union
+from speedy import imemoize_v2
+
+
 def get_prompt_template(
     task: str,
     input_variables: list[str] = [],
     max_tokens: int = 4096,
-    model: str = 'gpt-4o',
+    model: str = "gpt-4o",
     kwargs_openai: dict = {},
-    to_langchain: bool = False,
-    verbose: bool = False
-) -> str:
+    verbose: bool = False,
+) -> PromptTemplate:
     """
     Returns a prompt template for the given task and input variables.
 
@@ -496,9 +501,7 @@ def get_prompt_template(
     input_variables = [variable.upper() for variable in input_variables]
 
     # Create a string of input variables
-    variable_string = "\n".join(
-        "{" + variable + "}" for variable in input_variables
-    )
+    variable_string = "\n".join("{" + variable + "}" for variable in input_variables)
 
     # Initialize the OpenAI client with a timeout of 60 seconds
     client = OpenAI(timeout=60)
@@ -512,7 +515,7 @@ def get_prompt_template(
     # Create a list of messages for the OpenAI client
     messages = [
         {"role": "user", "content": prompt},
-        {"role": "assistant", "content": assistant_partial}
+        {"role": "assistant", "content": assistant_partial},
     ]
 
     # Get the response from the OpenAI client
@@ -521,7 +524,7 @@ def get_prompt_template(
         messages=messages,
         temperature=0.0,
         max_tokens=max_tokens,
-        **kwargs_openai
+        **kwargs_openai,
     )
 
     # Extract the instructions from the response
@@ -531,6 +534,7 @@ def get_prompt_template(
     if verbose:
         try:
             from llm_utils import display_chat_messages_as_html
+
             display_chat_messages_as_html(
                 messages + [{"role": "assistant", "content": instructions}]
             )
@@ -542,15 +546,25 @@ def get_prompt_template(
     instructions = instructions.strip()
 
     # Create a LangChain PromptTemplate object if requested
-    if to_langchain:
-        _langchain_template = PromptTemplate(
-            template=instructions, input_variables=input_variables
-        )
-        for variable in _langchain_template.input_variables:
-            if variable not in input_variables:
-                logger.warning(f"{variable=} is in the template but was not requested")
+    _langchain_template = PromptTemplate(
+        template=instructions, input_variables=input_variables
+    )
+    for variable in _langchain_template.input_variables:
+        if variable not in input_variables:
+            logger.warning(f"{variable=} is in the template but was not requested")
+    if input_variables:
+        missing_variables = [
+            variable
+            for variable in input_variables
+            if variable not in _langchain_template.input_variables
+        ]
+        # assert (
+        #     len(missing_variables) == 0
+        # ), f"Missing input variables: {', '.join(missing_variables)}"
+        logger.warning(f"Missing input variables: {', '.join(missing_variables)}")
+    return _langchain_template
 
-        return _langchain_template
-
-    # Return the prompt template as a string
-    return instructions
+def get_langchain_openai_model(model: Union[str, ChatOpenAI], **kwargs) -> ChatOpenAI:
+    if isinstance(model, str):
+        model = ChatOpenAI(model=model, temperature=0.0, **kwargs)
+    return model

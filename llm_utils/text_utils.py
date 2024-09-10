@@ -6,3 +6,5 @@ def extract_json(content, is_list=False):
         c = content[l:r]
         return json.loads(c)
     
+    
+__all__ = ['extract_json']
