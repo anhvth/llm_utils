@@ -145,7 +145,7 @@ def transform_messages_to_chatml(input_data, input_format="auto"):
     return input_data
 
 
-def display_chat_messages_as_html(msgs: List, theme="light", return_html=False):
+def display_chat_messages_as_html(msgs, theme="light", return_html=False):
     from langchain_core.prompts.chat import MessageLikeRepresentation
     
     if isinstance(msgs[0], MessageLikeRepresentation): # type: ignore
