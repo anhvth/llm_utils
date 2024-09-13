@@ -144,15 +144,43 @@ def transform_messages_to_chatml(input_data, input_format="auto"):
 
     return input_data
 
+from typing import Literal
 
-def display_chat_messages_as_html(msgs, theme="light", return_html=False):
+    
+def render_chat_messages_fasthtml(example_messages):
+    from fasthtml.common import Div, fast_app, show, Div, Html, Link, Script
+    from IPython.display import display
+    headers = (Script(src="https://cdn.tailwindcss.com"),
+            Link(rel="stylesheet", href="https://cdn.jsdelivr.net/npm/daisyui@4.11.1/dist/full.min.css"))
+    
+    # Displaying a single message
+    d = Div(
+        Div("Chat header here", cls="chat-header"),
+        Div("My message goes here", cls="chat-bubble chat-bubble-primary"),
+        cls="chat chat-start"
+    )
+    
+    def ChatMessage(msg):
+        return Div(
+            Div(msg['role'], cls="chat-header"),
+            Div(msg['content'], cls=f"chat-bubble chat-bubble-{'primary' if msg['role'] == 'user' else 'secondary'}"),
+            cls=f"chat chat-{'end' if msg['role'] == 'user' else 'start'}")
+    
+    chatbox = Div(*[ChatMessage(msg) for msg in example_messages], cls="chat-box", id="chatlist")
+    html_object = show(Html(*headers, chatbox))
+    display(html_object)
+    
+
+def display_chat_messages_as_html(msgs, theme:Literal["fasthml", "light", "dark"]='fasthtml', return_html=False):
+
     from langchain_core.prompts.chat import MessageLikeRepresentation
     
-    if isinstance(msgs[0], MessageLikeRepresentation): # type: ignore
+    if not isinstance(msgs[0], dict):
         from langchain_community.adapters.openai import convert_message_to_dict
         msgs = [convert_message_to_dict(msg) for msg in msgs]
-
-    if theme == "light":
+    if theme == "fasthtml":
+        return render_chat_messages_fasthtml(msgs)
+    elif theme == "light":
         color_scheme = {
             "system": {
                 "background": "#FFAAAA",
