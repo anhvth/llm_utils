@@ -7,7 +7,7 @@ from .meta_prompt import (
     get_langchain_openai_model,
     generate_program_json,
     generate_pydantic_parse_chain,
-    Example
+    Example,
 )
 
 __all__ = [
@@ -19,7 +19,7 @@ __all__ = [
     "get_langchain_openai_model",
     "generate_program_json",
     "generate_pydantic_parse_chain",
-    "Example"
+    "Example",
 ]
 
 __all__.extend(chat_format.__all__)
