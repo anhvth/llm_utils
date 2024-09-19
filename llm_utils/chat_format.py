@@ -1,4 +1,4 @@
-from IPython.core.display import HTML, Markdown, display
+from IPython.display import HTML, Markdown, display
 from copy import deepcopy as deeopcopy
 from loguru import logger
 from typing import List, Dict, Union

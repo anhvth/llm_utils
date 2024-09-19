@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import List, Union, Optional
-from IPython.core.display import HTML, Markdown, display
+from IPython.display import HTML, Markdown, display
 from copy import deepcopy
 from loguru import logger
 
