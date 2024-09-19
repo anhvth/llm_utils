@@ -5,7 +5,7 @@ from langchain_core.prompts import (
 )
 import json
 from langchain_core.prompts.chat import MessageLikeRepresentation
-from langchain_core.pydantic_v1 import BaseModel as BaseModelV1
+from pydantic import BaseModel as BaseModelV1
 from typing import List, Dict, Tuple, Sequence
 
 from langchain.output_parsers import PydanticOutputParser

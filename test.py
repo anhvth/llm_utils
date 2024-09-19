@@ -5,7 +5,7 @@ Task Description: Create a prompt template that takes a query as input and outpu
 ```python
 from langchain.output_parsers import PydanticOutputParser
 from langchain_core.prompts import PromptTemplate
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
 
 # Set up the language model
@@ -53,7 +53,7 @@ Task Description: Create a prompt template that takes a query as input and outpu
 ```python
 from langchain.output_parsers import PydanticOutputParser
 from langchain_core.prompts import PromptTemplate
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
 
 # Set up the language model
@@ -98,7 +98,7 @@ Task Description: Create a prompt template that takes a query as input and outpu
 ```python
 from langchain.output_parsers import PydanticOutputParser
 from langchain_core.prompts import PromptTemplate
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
 
 # Set up the language model
@@ -143,7 +143,7 @@ Task Description: Create a prompt template that takes a query as input and outpu
 ```python
 from langchain.output_parsers import PydanticOutputParser
 from langchain_core.prompts import PromptTemplate
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
 
 # Set up the language model
@@ -185,7 +185,7 @@ Example 5: Task Description: Create a prompt template that uses few-shot learnin
 ```python
 from langchain_core.prompts import PromptTemplate, FewShotPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
 
 
