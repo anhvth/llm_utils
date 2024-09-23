@@ -1,4 +1,4 @@
-from speedy import load_by_ext
+from speedy_utils import load_by_ext
 from llm_utils.chat_format import identify_format, transform_messages, display_chat_messages_as_html
 
 def load_chat_dataset(path, current_format='auto', return_format='chatml'):

@@ -470,7 +470,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import JsonOutputParser
 from loguru import logger
 from typing import Union
-from speedy import imemoize_v2
+from speedy_utils import imemoize_v2
 
 
 def get_prompt_template(
