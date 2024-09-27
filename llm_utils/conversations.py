@@ -1,8 +1,10 @@
-from pydantic import BaseModel
-from typing import List, Union, Optional
-from IPython.display import HTML, Markdown, display
 from copy import deepcopy
+from typing import List, Optional
+
+from IPython.display import HTML, display
 from loguru import logger
+from pydantic import BaseModel
+
 
 class Message(BaseModel):
     role: str
