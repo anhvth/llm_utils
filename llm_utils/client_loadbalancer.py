@@ -1,12 +1,16 @@
 import asyncio
+import os
+import time
+from pathlib import Path
 from threading import Lock
 from typing import List, Union
-
+from speedy_utils import identify_uuid, dump_json_or_pickle, load_by_ext
 from loguru import logger
 from openai import OpenAI
-from tqdm.asyncio import \
-    tqdm_asyncio  # Use the async version of tqdm to track async tasks
+from tqdm.asyncio import tqdm_asyncio
 
+# ~/.cache/llm_cache/
+CACHE_DIR = str(Path('~/.cache/llm_cache').expanduser().resolve())
 
 class LLMClientLB:
     """Manages multiple clients to handle API requests, balancing resource usage."""
@@ -51,33 +55,50 @@ class LLMClientLB:
         with self.lock:
             self.endpoint_usage[endpoint] -= 1
 
-    async def create_async(self, messages: List[dict], n: int = 1, temperature=0.4, **kwargs) -> List[str]:
+    async def create_async(self, messages: List[dict], n: int = 1, temperature=0.4, cache=True, max_retries=10, **kwargs) -> List[str]:
         """
         Create completions using the least busy client asynchronously.
 
         Args:
             messages (List[dict]): The list of messages for the completion.
             n (int): Number of completions to generate.
+            temperature (float): Sampling temperature to use.
+            cache (bool): Whether to cache the result.
+            max_retries (int): Maximum number of retries if the request fails.
 
         Returns:
             List[str]: Generated completions.
         """
-        endpoint = self._select_endpoint()
-        client = self.clients[endpoint]
+        cache_id = identify_uuid([messages, n, temperature, kwargs])
+        cache_file = os.path.join(CACHE_DIR, cache_id + ".json")
+        if cache and os.path.exists(cache_file):
+            return load_by_ext(cache_file)
 
-        try:
-            completion = await asyncio.to_thread(client.chat.completions.create,  # Run sync method in thread
-                                                 model=self.model_name,
-                                                 messages=messages,
-                                                 temperature=temperature,
-                                                 n=n,
-                                                 **kwargs)
-            return [choice.message.content for choice in completion.choices]
-        except Exception as e:
-            logger.error(f"Error during completion: {e}")
-            raise
-        finally:
-            self._release_endpoint(endpoint)
+        retries = 0
+        while retries < max_retries:
+            endpoint = self._select_endpoint()
+            client = self.clients[endpoint]
+
+            try:
+                completion = await asyncio.to_thread(client.chat.completions.create,  # Run sync method in thread
+                                                     model=self.model_name,
+                                                     messages=messages,
+                                                     temperature=temperature,
+                                                     n=n,
+                                                     **kwargs)
+                output = [choice.message.content for choice in completion.choices]
+                if cache:
+                    logger.debug(f"Caching completion: {cache_id}")
+                    dump_json_or_pickle(output, cache_file)
+                return output
+            except Exception as e:
+                logger.error(f"Error during completion on endpoint {endpoint}: {e}")
+                retries += 1
+                await asyncio.sleep(5)  # Wait for 5 seconds before retrying
+            finally:
+                self._release_endpoint(endpoint)
+
+        raise Exception(f"Failed to create completion after {max_retries} retries.")
 
     def create(self, messages: List[dict], n: int = 1, temperature=0.4, **kwargs) -> List[str]:
         """
