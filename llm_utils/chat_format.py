@@ -1,7 +1,9 @@
-from IPython.display import HTML, Markdown, display
 from copy import deepcopy as deeopcopy
+from typing import Dict, List, Union
+
+from IPython.display import HTML, Markdown, display
 from loguru import logger
-from typing import List, Dict, Union
+
 
 def identify_format(item):
     if isinstance(item, list) and "role" in item[0]:
@@ -146,9 +148,9 @@ def transform_messages_to_chatml(input_data, input_format="auto"):
 
 from typing import Literal
 
-    
+
 def render_chat_messages_fasthtml(example_messages):
-    from fasthtml.common import Div, fast_app, show, Div, Html, Link, Script
+    from fasthtml.common import Div, Html, Link, Script, fast_app, show
     from IPython.display import display
     headers = (Script(src="https://cdn.tailwindcss.com"),
             Link(rel="stylesheet", href="https://cdn.jsdelivr.net/npm/daisyui@4.11.1/dist/full.min.css"))
@@ -171,7 +173,7 @@ def render_chat_messages_fasthtml(example_messages):
     display(html_object)
     
 
-def display_chat_messages_as_html(msgs, theme:Literal["fasthml", "light", "dark"]='fasthtml', return_html=False):
+def display_chat_messages_as_html(msgs, theme:Literal["fasthml", "light", "dark"]='light', return_html=False):
 
     from langchain_core.prompts.chat import MessageLikeRepresentation
     
@@ -331,6 +333,7 @@ def get_conversation_one_turn(
 
 
 from difflib import ndiff
+
 from IPython.display import HTML
 
 
@@ -399,7 +402,7 @@ def display_conversations(data1, data2, theme="light"):
     display(HTML(html))
 
 
-from typing import List, Dict, Callable
+from typing import Callable, Dict, List
 
 
 def build_chatml_input(template: str, params: List[str]) -> Callable:
@@ -423,27 +426,6 @@ def build_chatml_input(template: str, params: List[str]) -> Callable:
     return formator
 
 
-# tobe remove
-
-# def create_prompt_from_messages(messages, input_format='auto', log=False, assistant_prefix='', print_msg=False):
-#     """
-#         Returns:
-#         - prompt: str (<|im_start|>role\n content<|im_end|>...<|im_start|>assistant\n{assistant_prefix})
-#         - last_message: str
-#     """
-#     if messages[-1]["role"] == "assistant":
-#         last_message = messages.pop()
-#     else:
-#         last_message = None
-
-#     # Convert to prompt
-#     prompt = ""
-#     for message in messages:
-#         role = message["role"]
-#         content = message["content"]
-#         prompt += f"<|im_start|>{role}\n {content}<|im_end|>\n"
-#     prompt += '<|im_start|>assistant\n'+assistant_prefix
-#     return prompt, last_message['content'] if last_message else None
 
 __all__ = [
     "transform_messages",

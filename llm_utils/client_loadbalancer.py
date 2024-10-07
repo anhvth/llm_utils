@@ -4,13 +4,15 @@ import time
 from pathlib import Path
 from threading import Lock
 from typing import List, Union
-from speedy_utils import identify_uuid, dump_json_or_pickle, load_by_ext
+
 from loguru import logger
 from openai import OpenAI
+from speedy_utils import dump_json_or_pickle, identify_uuid, load_by_ext
 from tqdm.asyncio import tqdm_asyncio
 
 # ~/.cache/llm_cache/
-CACHE_DIR = str(Path('~/.cache/llm_cache').expanduser().resolve())
+CACHE_DIR = str(Path("~/.cache/llm_cache").expanduser().resolve())
+
 
 class LLMClientLB:
     """Manages multiple clients to handle API requests, balancing resource usage."""
@@ -55,7 +57,9 @@ class LLMClientLB:
         with self.lock:
             self.endpoint_usage[endpoint] -= 1
 
-    async def create_async(self, messages: List[dict], n: int = 1, temperature=0.4, cache=True, max_retries=10, **kwargs) -> List[str]:
+    async def create_async(
+        self, messages: List[dict], n: int = 1, temperature=0.4, cache=True, max_retries=10, **kwargs
+    ) -> List[str]:
         """
         Create completions using the least busy client asynchronously.
 
@@ -72,7 +76,8 @@ class LLMClientLB:
         cache_id = identify_uuid([messages, n, temperature, kwargs])
         cache_file = os.path.join(CACHE_DIR, cache_id + ".json")
         if cache and os.path.exists(cache_file):
-            return load_by_ext(cache_file)
+            logger.debug(f"Hit: {cache_file}")
+            return load_by_ext(cache_file)['choices']
 
         retries = 0
         while retries < max_retries:
@@ -80,16 +85,18 @@ class LLMClientLB:
             client = self.clients[endpoint]
 
             try:
-                completion = await asyncio.to_thread(client.chat.completions.create,  # Run sync method in thread
-                                                     model=self.model_name,
-                                                     messages=messages,
-                                                     temperature=temperature,
-                                                     n=n,
-                                                     **kwargs)
-                output = [choice.message.content for choice in completion.choices]
+                completion = await asyncio.to_thread(
+                    client.chat.completions.create,  # Run sync method in thread
+                    model=self.model_name,
+                    messages=messages,
+                    temperature=temperature,
+                    n=n,
+                    **kwargs,
+                )
+                output = [choice.model_dump() for choice in completion.choices]
                 if cache:
-                    logger.debug(f"Caching completion: {cache_id}")
-                    dump_json_or_pickle(output, cache_file)
+                    logger.debug(f"Caching completion: {cache_file}")
+                    dump_json_or_pickle({"input_messages": messages, "choices": output}, cache_file)
                 return output
             except Exception as e:
                 logger.error(f"Error during completion on endpoint {endpoint}: {e}")
@@ -97,28 +104,32 @@ class LLMClientLB:
                 await asyncio.sleep(5)  # Wait for 5 seconds before retrying
             finally:
                 self._release_endpoint(endpoint)
+        logger.error("Fail, total retries: {retries}")
+        return None
 
-        raise Exception(f"Failed to create completion after {max_retries} retries.")
+    # def create(self, messages: List[dict], n: int = 1, temperature=0.4, **kwargs) -> List[str]:
+    #     """
+    #     Create completions using the least busy client.
 
-    def create(self, messages: List[dict], n: int = 1, temperature=0.4, **kwargs) -> List[str]:
-        """
-        Create completions using the least busy client.
+    #     Args:
+    #         messages (List[dict]): The list of messages for the completion.
+    #         n (int): Number of completions to generate.
 
-        Args:
-            messages (List[dict]): The list of messages for the completion.
-            n (int): Number of completions to generate.
-
-        Returns:
-            List[str]: Generated completions.
-        """
-        return asyncio.run(self.create_async(messages, n, temperature, **kwargs))
+    #     Returns:
+    #         List[str]: Generated completions.
+    #     """
+    #     return asyncio.run(self._create_wrapper(messages, n, temperature, **kwargs))
+    async def _create_wrapper(self, messages: List[dict], n: int, temperature: float, **kwargs) -> List[str]:
+        return await self.create_async(messages, n, temperature, **kwargs)
 
     def log_usage(self):
         """Log the current usage of all endpoints."""
         with self.lock:
             logger.info(f"Current endpoint usage: {self.endpoint_usage}")
 
-    async def batch_run(self, batch_messages: List[List[dict]], n: int = 1, temperature=0.4, **kwargs) -> List[List[str]]:
+    async def batch_run(
+        self, batch_messages: List[List[dict]], n: int = 1, temperature=0.4, **kwargs
+    ) -> List[List[str]]:
         """
         Run multiple completion requests asynchronously and track progress using tqdm.
 
@@ -132,8 +143,36 @@ class LLMClientLB:
             List[List[str]]: A list of lists of generated completions.
         """
         tasks = [
-            self.create_async(messages=messages, n=n, temperature=temperature, **kwargs)
-            for messages in batch_messages
+            self.create_async(messages=messages, n=n, temperature=temperature, **kwargs) for messages in batch_messages
         ]
         results = await tqdm_asyncio.gather(*tasks, desc="Processing completions")
         return results
+
+    async def chat(self, input_msg: str, history: List[dict]= [] , **kwargs):
+        """
+        Facilitates a chat interaction by sending the user's message
+        and returning the assistant's response along with updated message history.
+
+        Args:
+            input_msg (str): The user's input message.
+            history (List[dict]): The prior conversation history.
+
+        Returns:
+            Tuple[Union[List[str], None], List[dict]]: A tuple containing the assistant's response choices and the updated message history.
+        """
+        msgs = history + [{"role": "user", "content": input_msg}]
+
+        try:
+            # Assuming create returns a list of completion texts
+            choices = await self.create_async(messages=msgs, **kwargs)
+
+            if choices is not None and len(choices) > 0:
+                assistant_message = choices[0]  # assuming the first choice is the most relevant
+                msgs.append({"role": "assistant", "content": assistant_message['message']['content']})
+                return choices[0]['message']['content'], msgs
+            else:
+                logger.error("No choices received from model.")
+                return None, msgs
+        except Exception as e:
+            logger.error(f"Error in chat method: {e}")
+            return None, msgs
