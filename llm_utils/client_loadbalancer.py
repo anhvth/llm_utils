@@ -23,7 +23,7 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 
 def _start_server(
     gpu_ids: List[int],
-    model_path: str,
+    model_name_or_path:str,
     base_port: int,
     verbose: bool = False,
     use_docker: bool = True,
@@ -37,7 +37,6 @@ def _start_server(
     additional_volumes: Optional[List[str]] = None
 ):
 
-    model_path = os.path.abspath(model_path)
     additional_volumes = additional_volumes or []
 
     tensor_parallel_size = len(gpu_ids)
@@ -45,10 +44,12 @@ def _start_server(
 
 
     # Construct the command to run directly on the host
+    if os.path.exists(model_name_or_path):
+        model_name_or_path = os.path.abspath(model_name_or_path)
     host_command = [
         f"CUDA_VISIBLE_DEVICES={gpu_ids_str}",
         vllm_path, "serve",
-        os.path.abspath(model_path),
+        model_name_or_path,
         "--tensor-parallel-size", str(tensor_parallel_size),
         "--gpu-memory-utilization", str(gpu_memory_utilization),
         "--trust-remote-code",
@@ -88,21 +89,20 @@ class LLMClientLB:
 
     def __init__(
         self,
-        endpoints: List[Union[int, str]],
-        model_name: Optional[str] = None,
-        gpu_ids: Optional[List[int]] = None,
-        model_path: Optional[str] = None,
-        server_port: Optional[int] = None,
-        use_docker: bool = True,
-        tensor_parallel_size: int = 1,
-        gpu_memory_utilization: float = 0.9,
-        dtype: str = "half",
-        enforce_eager: bool = True,
-        max_model_len: int = 2048,
-        swap_space: int = 4,
-        vllm_path: str = "/home/anhvth5/miniconda3/envs/py312-vllm/bin/vllm",
-        additional_volumes: Optional[List[str]] = None,
-        verbose: bool = False
+        endpoints: List[Union[int, str]]= [38000+i for i in range(8)],
+        # model_name_or_path: Optional[str] = None,
+        # gpu_ids: Optional[List[int]] = None,
+        # server_port: Optional[int] = None,
+        # use_docker: bool = True,
+        # tensor_parallel_size: int = 1,
+        # gpu_memory_utilization: float = 0.9,
+        # dtype: str = "half",
+        # enforce_eager: bool = True,
+        # max_model_len: int = 2048,
+        # swap_space: int = 4,
+        # vllm_path: str = "vllm",
+        # additional_volumes: Optional[List[str]] = None,
+        # verbose: bool = False
     ):
         """
         Initialize the Client Load Balancer.
@@ -126,7 +126,7 @@ class LLMClientLB:
         """
         self.endpoint_usage: Dict[Union[int, str], int] = {endpoint: 0 for endpoint in endpoints}
         self.lock = Lock()
-        self.model_name = model_name
+        # self.model_name = model_name_or_path
         self.clients: Dict[Union[int, str], OpenAI] = {}
 
         # Validate inputs
@@ -138,50 +138,53 @@ class LLMClientLB:
         for endpoint in endpoints:
             if self._is_endpoint_available(endpoint):
                 self.clients[endpoint] = self._initialize_client(endpoint)
-                logger.info(f"Connected to existing server at endpoint: {endpoint}")
+                # logger.success(f"Connected to existing server at endpoint: {endpoint}")
             else:
-                logger.warning(f"Endpoint {endpoint} is not available. Attempting to start server.")
+                logger.warning(f"Endpoint {endpoint} is not available. Ignore this server")
 
-                if gpu_ids is None or model_path is None or server_port is None:
-                    logger.error(
-                        "To start a new server, gpu_ids, model_path, and base_port must be provided."
-                    )
-                    raise ValueError(
-                        "gpu_ids, model_path, and base_port must be provided to start a new server."
-                    )
+                # if gpu_ids is None or model_name_or_path is None or server_port is None:
+                #     logger.error(
+                #         "To start a new server, gpu_ids, model_path, and base_port must be provided."
+                #     )
+                #     raise ValueError(
+                #         "gpu_ids, model_path, and base_port must be provided to start a new server."
+                #     )
+            # if do_start_server:
+            #     try:
+            #         _start_server(
+            #             model_name_or_path=model_name_or_path,
+            #             gpu_ids=gpu_ids,
+            #             base_port=server_port,
+            #             verbose=verbose,
+            #             use_docker=use_docker,
+            #             tensor_parallel_size=tensor_parallel_size,
+            #             gpu_memory_utilization=gpu_memory_utilization,
+            #             dtype=dtype,
+            #             enforce_eager=enforce_eager,
+            #             max_model_len=max_model_len,
+            #             swap_space=swap_space,
+            #             vllm_path=vllm_path,
+            #             additional_volumes=additional_volumes
+            #         )
+            #         # Wait for the server to be ready
+            #         for _ in range(100):
+            #             if self._is_endpoint_available(endpoint):
+            #                 break
+            #             time.sleep(1)
+            #         else:
+            #             raise RuntimeError(f"Server at endpoint {endpoint} did not become available.")
 
-                try:
-                    _start_server(
-                        gpu_ids=gpu_ids,
-                        model_path=model_path,
-                        base_port=server_port,
-                        verbose=verbose,
-                        use_docker=use_docker,
-                        tensor_parallel_size=tensor_parallel_size,
-                        gpu_memory_utilization=gpu_memory_utilization,
-                        dtype=dtype,
-                        enforce_eager=enforce_eager,
-                        max_model_len=max_model_len,
-                        swap_space=swap_space,
-                        vllm_path=vllm_path,
-                        additional_volumes=additional_volumes
-                    )
-                    # Wait for the server to be ready
-                    for _ in range(100):
-                        if self._is_endpoint_available(endpoint):
-                            break
-                        time.sleep(1)
-                    else:
-                        raise RuntimeError(f"Server at endpoint {endpoint} did not become available.")
-
-                    self.clients[endpoint] = self._initialize_client(endpoint)
-                    logger.info(f"Started and connected to server at endpoint: {endpoint}")
-                except Exception as e:
-                    logger.error(f"Failed to start server at endpoint {endpoint}: {e}")
-                    raise
+            #         self.clients[endpoint] = self._initialize_client(endpoint)
+            #         logger.info(f"Started and connected to server at endpoint: {endpoint}")
+            #     except Exception as e:
+            #         logger.error(f"Failed to start server at endpoint {endpoint}: {e}")
+            #         raise
 
         # Determine model name if not provided
-        if self.model_name is None and endpoints:
+        
+        
+        if endpoints:
+            logger.info(f'Available endpoints are {self.clients.keys()}.')
             first_client = next(iter(self.clients.values()))
             available_models = first_client.models.list().data
             if available_models:
@@ -273,6 +276,7 @@ class LLMClientLB:
         cache_file = os.path.join(CACHE_DIR, cache_id + ".json")
         if cache and os.path.exists(cache_file):
             try:
+                logger.info(f'Hit {cache_file}')
                 return load_by_ext(cache_file)
             except Exception as e:
                 logger.warning(f"Error loading cache file {cache_file}: {e}. Continuing without cache.")
@@ -301,6 +305,7 @@ class LLMClientLB:
                     "input_messages": messages,
                     "choices": [choice.model_dump() for choice in completion.choices]
                 }
+                logger.info(f"[{sum(self.endpoint_usage.values())}] | Created completion on endpoint {endpoint}.")
                 if cache:
                     dump_json_or_pickle(output, cache_file)
                 return output
@@ -364,6 +369,10 @@ class LLMClientLB:
         Returns:
             List[Optional[Dict]]: A list of completion results.
         """
+        if isinstance(batch_messages[0][0], str):
+            logger.warning("Batch messages must be a list of lists of dicts.")
+            for i, message in enumerate(batch_messages):
+                batch_messages[i] = [{'role': 'user', 'content': message}]
         semaphore = asyncio.Semaphore(max_workers)
 
         async def sem_create_async(messages: List[dict]) -> Optional[Dict]:
@@ -423,7 +432,7 @@ class LLMClientLB:
         Returns:
             List[Optional[Dict]]: A list of completion results.
         """
-        return asyncio.run(self.batch_run_async(batch_messages, n, temperature, max_workers, **kwargs))
+        # return asyncio.run(self.batch_run_async(batch_messages, n, temperature, max_workers, **kwargs))
 
     def log_usage(self):
         """Log the current usage of all endpoints."""
@@ -443,3 +452,50 @@ class LLMClientLB:
         """
         return output["choices"][0]["message"]["content"] if output else ""
 
+    async def handle_generic_request(
+        self, endpoint: Union[int, str], payload: dict
+    ) -> Optional[Dict]:
+        """
+        Handles a generic request by sending it to the specified endpoint.
+
+        Args:
+            endpoint (Union[int, str]): The endpoint to which the request will be forwarded.
+            payload (dict): The request payload to be sent to the server.
+
+        Returns:
+            Optional[Dict]: The server's response or None if the request fails.
+        """
+        try:
+            from openai import OpenAI
+
+            # Modify OpenAI's API key and API base to use vLLM's API server.
+            openai_api_key = "EMPTY"
+            openai_api_base = f"http://localhost:{endpoint}/v1"
+            client = OpenAI(
+                api_key=openai_api_key,
+                base_url=openai_api_base,
+            )
+            import ipdb; ipdb.set_trace()
+            completion = client.completions.create(model=self.model_name,
+                                                prompt=payload['prompt'])
+            return completion.json()
+        except requests.RequestException as e:
+            logger.error(f"Error in handling generic request to {endpoint}: {e}")
+            return None
+
+    async def forward_request(self, payload: dict) -> Optional[Dict]:
+        """
+        Selects the least busy endpoint and forwards a generic request payload to it.
+
+        Args:
+            payload (dict): The generic request payload to forward.
+
+        Returns:
+            Optional[Dict]: The server's response or None if the request fails.
+        """
+        endpoint = self._select_endpoint()
+        try:
+            result = await self.handle_generic_request(endpoint, payload)
+            return result
+        finally:
+            self._release_endpoint(endpoint)
