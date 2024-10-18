@@ -15,6 +15,13 @@ setup(
     ],
     install_requires=[
         'numpy',
-        'pandas'
+        'pandas',
+        'langchain',
+        'langchain_core',
+        'langchain_openai',
+        'langchain_community',
+        'faiss-cpu',
+        'langchain-chroma',
+          
     ],
 )

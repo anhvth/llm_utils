@@ -1,8 +1,7 @@
 from llm_utils.tokenizers import get_tokenized_length
 
 from .chat_format import *
-from .client_loadbalancer import (LLMClientLoadBalancer,
-                                  LLMClientLoadBalancerAsync)
+from .client_loadbalancer import (LLMClientLB)
 from .conversations import Conversation, Conversations, Message
 from .load_chat_dataset import load_chat_dataset
 from .meta_prompt import (Example, generate_program_json,
@@ -12,9 +11,9 @@ from .text_utils import *
 
 get_tokenized_length
 
-LLMClientLB = LLMClientLoadBalancerAsync
+
 __all__ = [
-    "get_tokenized_length"
+    "get_tokenized_length",
     "load_chat_dataset",
     "Conversations",
     "Message",
@@ -25,8 +24,7 @@ __all__ = [
     "generate_pydantic_parse_chain",
     "Example",
     "LLMClientLB",
-    "LLMClientLoadBalancer",
-    "LLMClientLoadBalancerAsync",
+    "LLMClientLB",
 ]
 from . import chat_format, meta_prompt, text_utils
 

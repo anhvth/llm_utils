@@ -1,187 +1,229 @@
-import asyncio
 import os
+from collections import Counter
 from pathlib import Path
 from threading import Lock
-from typing import Dict, List, Optional, Union
-import requests
-from loguru import logger
-from openai import OpenAI
-from speedy_utils import dump_json_or_pickle, identify_uuid, load_by_ext
-from tqdm.asyncio import tqdm_asyncio
-from tqdm import tqdm
+from typing import Any, Callable, Generic, List, Literal, Optional, TypeVar
+
+import openai
 import psutil
+from loguru import logger
+from openai.types.completion import Completion
+from pydantic import BaseModel
+from speedy_utils import dump_json_or_pickle, identify_uuid, load_by_ext
 
-# Define the cache directory
-CACHE_DIR = str(Path("~/.cache/llm_cache").expanduser().resolve())
-os.makedirs(CACHE_DIR, exist_ok=True)
+T = TypeVar('T')
 
-def get_vllm_ports():
-    """Find all ports being used by VLLM processes."""
-    vllm_ports = []
-
-    # Iterate through all processes
-    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-        try:
-            # Check if the process name or command line has 'vllm'
-            if 'vllm' in ' '.join(proc.info['cmdline']).lower():
-                # Extract the port number from the command line arguments
-                for arg in proc.info['cmdline']:
-                    if '--port' in arg:
-                        port_index = proc.info['cmdline'].index(arg) + 1
-                        if port_index < len(proc.info['cmdline']):
-                            port = proc.info['cmdline'][port_index]
-                            vllm_ports.append(port)
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-            pass
-
-    return [int(x) for x in vllm_ports]
-
-
-class LLMClientLoadBalancer:
-    """Manages multiple clients to handle API requests with load balancing."""
-
-    def __init__(self, endpoints: List[int] = None):
-        if endpoints is None:
-            endpoints = get_vllm_ports()
-        self.endpoint_usage = {endpoint: 0 for endpoint in endpoints}
+class LLMClientLB(Generic[T]):
+    def __init__(self, workers: List[T], default_model_name, cache_dir: Optional[Path] = None,
+                 debug: bool = True):
+        """
+        Initialize with a list of workers and task distribution logic.
+        :param workers: List of worker instances (OpenAI clients).
+        :param default_model_name: Default model name for OpenAI client.
+        :param cache_dir: Optional cache directory.
+        :param debug: If True, enables debug-level logging.
+        """
+        self.workers = workers
+        self.usage_counter = Counter()
+        for worker in workers:
+            self.usage_counter[worker] = 0
         self.lock = Lock()
-        self.clients = self._initialize_clients(endpoints)
-        self.model_name = self._get_model_name_from_clients()
+        self.default_model_name = default_model_name
+        self.histories = []
+        self.cache_dir = cache_dir or Path(os.path.expanduser("~/.cache/llm_cache"))
+        self.debug = debug
 
-    def _initialize_clients(self, endpoints: List[int]) -> Dict[int, OpenAI]:
-        """Initialize available clients based on the endpoints (ports)."""
-        clients = {}
-        for endpoint in tqdm(endpoints, desc="Initializing Clients", unit="client"):
-            if self._is_endpoint_available(endpoint):
-                clients[endpoint] = self._create_openai_client(endpoint)
-            else:
-                logger.warning(f"Endpoint {endpoint} is not available and will be skipped.")
-        return clients
+        if self.debug:
+            logger.enable(__name__)
+            logger.debug("Logger initialized in debug mode.")
+        else:
+            logger.disable(__name__)
 
-    def _endpoint_to_url(self, endpoint: int) -> str:
-        """Convert a port endpoint to its corresponding URL."""
-        return f"http://localhost:{endpoint}/"
-
-    def _is_endpoint_available(self, endpoint: int) -> bool:
-        """Check if the given endpoint is available."""
-        url = self._endpoint_to_url(endpoint)
-        try:
-            response = requests.get(url + "health", timeout=5)
-            return response.status_code == 200
-        except requests.RequestException:
-            return False
-
-    def _create_openai_client(self, endpoint: int) -> OpenAI:
-        """Initialize the OpenAI client for the given endpoint."""
-        api_base = self._endpoint_to_url(endpoint) + "v1"
-        return OpenAI(api_key="EMPTY", base_url=api_base)
-
-    def _get_model_name_from_clients(self) -> str:
-        """Get the model name from the first available client."""
-        first_client = next(iter(self.clients.values()), None)
-        if first_client:
-            models = first_client.models.list().data
-            if models:
-                return models[0].id
-        logger.error("No models found from the client endpoints.")
-        raise ValueError("No available models.")
-
-    def _select_least_busy_endpoint(self) -> int:
-        """Select the endpoint with the fewest active requests."""
+    def _get_least_busy_worker(self) -> T:
+        """Select the worker that has handled the fewest tasks."""
         with self.lock:
-            return min(self.endpoint_usage, key=self.endpoint_usage.get)
+            v2k = {v: k for k, v in self.usage_counter.items()}
+            min_value = min(v2k.keys())
+            worker = v2k[min_value]
+            logger.info(f"Selected worker: {worker}, usage_counter: {self.usage_counter}")
+            return worker
 
-    def _update_usage_count(self, endpoint: int, delta: int):
-        """Update the usage count of a specific endpoint."""
+    def _update_worker_usage(self, worker: T, delta: int):
+        """Update the usage count of a worker."""
         with self.lock:
-            self.endpoint_usage[endpoint] += delta
+            self.usage_counter[worker] += delta
+            action = "Incremented" if delta > 0 else "Decremented"
+            logger.debug(f"{action} usage count for worker {worker}, Usage: {self.usage_counter}")
 
+    def _process_response(self, completion: dict, msgs, response_types):
+        """Helper method to process the response and extract content based on response_types."""
+        result = {}
+        content = completion["choices"][0]["message"]["content"]
+        if "content" in response_types:
+            result["content"] = content
 
-class LLMClientLoadBalancerAsync(LLMClientLoadBalancer):
-    """Extends LLMClientLoadBalancer with asynchronous capabilities."""
+        history = msgs.copy() + [{"role": "assistant", "content": content}]
+        if self.debug:
+            self.histories.append(history)
 
-    def __init__(self, endpoints: List[int] = None):
-        super().__init__(endpoints)
-        self.cache_hits = 0
-        self.cache_misses = 0
+        if "history" in response_types:
+            result["history"] = history
 
-    async def create_async(
+        if "completion" in response_types:
+            result["completion"] = completion
+
+        if "response_msg" in response_types:
+            result["response_msg"] = {"role": "assistant", "content": content}
+
+        return result
+
+    def converse(
         self,
-        messages: List[dict] | str,
-        n: int = 1,
-        temperature: float = 0.4,
-        cache: bool = True,
-        max_retries: int = 10,
-        **kwargs,
-    ) -> Optional[Dict]:
-        """Create completions using the least busy client asynchronously."""
+        prompt: str,
+        history=None,
+        temperature=0.01,
+        n=1,
+        response_types: List[Literal["completion", "content", "history", "response_msg"]] = [
+            "response_msg",
+            "history",
+            "content",
+        ],
+        cache=True,
+        system_msg: str = None,
+        **kwargs
+    ):
+        """Handles synchronous conversation with task distribution."""
+        assert not (history and system_msg), "Provide either history or system_msg, not both."
 
-        if isinstance(messages, str):
-            messages = [{"role": "user", "content": messages}]
-        cache_id = identify_uuid([messages, n, temperature, kwargs, self.model_name])
-        cache_file = f"{CACHE_DIR}/{cache_id}.json"
+        assert n == 1, "n > 1 is not supported"
+        if system_msg:
+            history = [{"role": "system", "content": system_msg}]
+        if not history:
+            history = []
+
+        msgs = history + [{"role": "user", "content": prompt}]
+        id = identify_uuid([prompt, history, kwargs])
+        cache_file = self.cache_dir / f"{id}.json"
+
+        # Check if the response is cached
+        completion = None
         if cache and os.path.exists(cache_file):
             try:
-                logger.debug(f"Cache hit: {cache_file}")
-                self.cache_hits += 1  # Increment cache hit counter
-                return load_by_ext(cache_file)
-            except Exception as e:
-                logger.warning(f"Failed to load cache: {e}, computing normally.")
+                logger.info(f"Loading cached completion from {cache_file}")
+                completion = load_by_ext(cache_file)
+            except:
+                logger.warning(f"Failed to load cached completion from {cache_file}, now generating a new one.")
 
-        self.cache_misses += 1  # Increment cache miss counter
-        err = None
-        for attempt in range(max_retries):
-            endpoint = self._select_least_busy_endpoint()
-            client = self.clients.get(endpoint)
-            if not client:
-                logger.error(f"No client for endpoint {endpoint}. Retrying {attempt + 1}/{max_retries}.")
-                await asyncio.sleep(1)
-                continue
+        if not completion:
+            client = self._get_least_busy_worker()
+            self._update_worker_usage(client, 1)
+
+            completion = client.chat.completions.create(
+                model=self.default_model_name, messages=msgs, temperature=temperature, **kwargs
+            ).model_dump()
+
+            self._update_worker_usage(client, -1)
+
+            if cache:
+                logger.info(f"Caching completion to {cache_file}")
+                dump_json_or_pickle(completion, cache_file)
+
+        # Process the response
+        return self._process_response(completion, msgs, response_types)
+
+    async def aconverse(
+        self,
+        prompt: str,
+        history=None,
+        temperature=0.01,
+        n=1,
+        response_types: List[Literal["completion", "content", "history", "response_msg"]] = [
+            "response_msg",
+            "history",
+            "content",
+        ],
+        cache=True,
+        system_msg: str = None,
+        **kwargs,
+    ):
+        """Handles asynchronous conversation with task distribution."""
+        assert not (history and system_msg), "Provide either history or system_msg, not both."
+
+        assert n == 1, "n > 1 is not supported"
+        if system_msg:
+            history = [{"role": "system", "content": system_msg}]
+        if not history:
+            history = []
+
+        msgs = history + [{"role": "user", "content": prompt}]
+        id = identify_uuid([prompt, history, kwargs])
+        cache_file = self.cache_dir / f"{id}.json"
+
+        # Check if the response is cached
+        completion = None
+        if cache and os.path.exists(cache_file):
             try:
-                self._update_usage_count(endpoint, 1)
-                completion = await asyncio.to_thread(
-                    client.chat.completions.create,
-                    model=self.model_name,
-                    messages=messages,
-                    temperature=temperature,
-                    n=n,
-                    **kwargs,
-                )
-                result = {"input_messages": messages, "choices": [choice.model_dump() for choice in completion.choices]}
-                if cache:
-                    dump_json_or_pickle(result, cache_file)
-                    logger.debug(f"Cache saved: {cache_file}")
-                return result
-            except Exception as e:
-                logger.error(f"Error during async completion on endpoint {endpoint}: {e}")
-                await asyncio.sleep(1)
-                err = e
-            finally:
-                self._update_usage_count(endpoint, -1)
-        logger.error("Max retries reached without success.")
-        return err
+                logger.info(f"Loading cached completion from {cache_file}")
+                completion = load_by_ext(cache_file)
+            except:
+                logger.warning(f"Failed to load cached completion from {cache_file}, now generating a new one.")
 
-    async def batch_run_async(
-        self, batch_messages: List[List[dict]], n: int = 1, temperature: float = 0.4, max_workers: int = 32, **kwargs
-    ) -> List[Optional[Dict]]:
-        """Run multiple completion requests asynchronously with limited concurrency, preserving order."""
-        semaphore = asyncio.Semaphore(max_workers)
+        if not completion:
+            client = self._get_least_busy_worker()
+            self._update_worker_usage(client, 1)
 
-        async def wrapped_create(index: int, messages: List[dict]):
-            async with semaphore:
-                result = await self.create_async(messages=messages, n=n, temperature=temperature, **kwargs)
-                return index, result
+            completion = await client.chat.completions.create(
+                model=self.default_model_name, messages=msgs, temperature=temperature, **kwargs
+            )
+            completion = completion.model_dump()
 
-        with tqdm_asyncio(total=len(batch_messages), desc="Processing Completions", unit="req") as pbar:
-            # Create tasks, associating each one with its index
-            tasks = [wrapped_create(i, messages) for i, messages in enumerate(batch_messages)]
-            results = [None] * len(batch_messages)  # Placeholder for results
+            self._update_worker_usage(client, -1)
 
-            # Process results as they complete, updating the results list
-            for coro in asyncio.as_completed(tasks):
-                index, result = await coro
-                results[index] = result
-                pbar.update(1)
-                pbar.set_postfix({"hits": self.cache_hits, "misses": self.cache_misses})
+            if cache:
+                logger.info(f"Caching completion to {cache_file}")
+                dump_json_or_pickle(completion, cache_file)
 
-            return results
+        # Process the response
+        return self._process_response(completion, msgs, response_types)
+
+    @classmethod
+    def auto_create(cls, ports=[], **kwargs):
+        """Automatically create LLMClientLB based on detected vLLM ports."""
+        if not ports:
+            ports = get_vllm_ports() + ports
+        base_urls = [f"http://localhost:{port}/v1" for port in ports]
+        model_name, clients = None, []
+
+        def get_model(client):
+            return client.models.list().data[0].id
+
+        for base_url in base_urls:
+            client = openai.OpenAI(base_url=base_url)
+            current_model_name = get_model(client)
+            model_name = model_name or current_model_name
+            assert current_model_name == model_name, f"New model: {current_model_name} != {model_name}"
+            clients.append(client)
+
+        return cls(clients, model_name, **kwargs)
+
+    @classmethod
+    def openai_create(cls, model_name="gpt-4o-mini"):
+        """Create an instance with OpenAI's public API."""
+        client = openai.OpenAI()
+        return cls([client], model_name)
+
+    def inspect_history(self, k=1, num_last_per_history=100):
+        """Inspect history of past conversations (debug mode only)."""
+        assert self.debug, "Must be in debug mode to inspect history"
+        for i, history in enumerate(self.histories[-k:]):
+            # print(f"Conversation {i}: ==========")
+            from llm_utils import display_chat_messages_as_html
+            display_chat_messages_as_html(history[-num_last_per_history:])
+
+    async def aconverse(self, **kwargs):
+        """Asynchronous version of converse."""
+        return self.converse(**kwargs)
+    
+    async def batch_aconverse(self, prompts, **kwargs):
+        """Asynchronous version of batch_converse."""
+    
