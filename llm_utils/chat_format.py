@@ -11,19 +11,13 @@ def identify_format(item):
     if isinstance(item, dict):
         if "conversations" in item:
             return "sharegpt"
-    raise ValueError(
-        f"The format of the item is not recognized. \n{type(item)=}, \n{item=}"
-    )
+    raise ValueError(f"The format of the item is not recognized. \n{type(item)=}, \n{item=}")
 
 
-def _transform_sharegpt_to_chatml(
-    item, default_system_message="You are a helpful assistant.", print_msg=False
-):
+def _transform_sharegpt_to_chatml(item, default_system_message="You are a helpful assistant.", print_msg=False):
     # if isinstance(item, list):
     # return [_transform_sharegpt_to_chatml(item) for item in item]
-    assert isinstance(
-        item, dict
-    ), "The item is not in the correct format. Please check the format of the item."
+    assert isinstance(item, dict), "The item is not in the correct format. Please check the format of the item."
 
     messages = []
     system_msg = item.get("system", "")
@@ -59,9 +53,7 @@ def transform_messages(
 
     if tokenizer is not None:
         assert frm == "chatml", "Tokenizer is only supported for chatml format."
-        prompt = tokenizer.apply_chat_template(
-            item, tokenize=False, add_generation_prompt=True
-        )
+        prompt = tokenizer.apply_chat_template(item, tokenize=False, add_generation_prompt=True)
         assert isinstance(prompt, str), "Prompt must be a string."
         if assistant_prefix:
             prompt += f"{assistant_prefix}"
@@ -75,16 +67,12 @@ def transform_messages(
                 system_message = chatml_messages[0]["content"]
                 ret = {"conversations": [], "system": system_message.strip()}
                 for message in chatml_messages[1:]:
-                    ret["conversations"].append(
-                        {"from": message["role"], "value": message["content"]}
-                    )
+                    ret["conversations"].append({"from": message["role"], "value": message["content"]})
             else:
                 system_message = "You are a helpful assistant."
                 ret = {"conversations": [], "system": system_message.strip()}
                 for message in chatml_messages:
-                    ret["conversations"].append(
-                        {"from": message["role"], "value": message["content"]}
-                    )
+                    ret["conversations"].append({"from": message["role"], "value": message["content"]})
             return ret
         elif to == "chatml":
             return _transform_sharegpt_to_chatml(item)
@@ -128,9 +116,7 @@ def transform_messages_to_chatml(input_data, input_format="auto"):
             input_format = "sharegpt"
         elif isinstance(input_data, str):
             # assume it has format <|im_start|>role\n content<|im_end|> use regex to parse
-            assert (
-                "<|im_end|>" in input_data
-            ), "The input format is not recognized. Please specify the input format."
+            assert "<|im_end|>" in input_data, "The input format is not recognized. Please specify the input format."
             input_format = "chatlm"
             parts = input_data.split("<|im_end|>")
             # for each part, split by <|im_start|> to get role and content
@@ -146,39 +132,45 @@ def transform_messages_to_chatml(input_data, input_format="auto"):
 
     return input_data
 
+
 from typing import Literal
 
 
 def render_chat_messages_fasthtml(example_messages):
     from fasthtml.common import Div, Html, Link, Script, fast_app, show
     from IPython.display import display
-    headers = (Script(src="https://cdn.tailwindcss.com"),
-            Link(rel="stylesheet", href="https://cdn.jsdelivr.net/npm/daisyui@4.11.1/dist/full.min.css"))
-    
+
+    headers = (
+        Script(src="https://cdn.tailwindcss.com"),
+        Link(rel="stylesheet", href="https://cdn.jsdelivr.net/npm/daisyui@4.11.1/dist/full.min.css"),
+    )
+
     # Displaying a single message
     d = Div(
         Div("Chat header here", cls="chat-header"),
         Div("My message goes here", cls="chat-bubble chat-bubble-primary"),
-        cls="chat chat-start"
+        cls="chat chat-start",
     )
-    
+
     def ChatMessage(msg):
         return Div(
-            Div(msg['role'], cls="chat-header"),
-            Div(msg['content'], cls=f"chat-bubble chat-bubble-{'primary' if msg['role'] == 'user' else 'secondary'}"),
-            cls=f"chat chat-{'end' if msg['role'] == 'user' else 'start'}")
-    
+            Div(msg["role"], cls="chat-header"),
+            Div(msg["content"], cls=f"chat-bubble chat-bubble-{'primary' if msg['role'] == 'user' else 'secondary'}"),
+            cls=f"chat chat-{'end' if msg['role'] == 'user' else 'start'}",
+        )
+
     chatbox = Div(*[ChatMessage(msg) for msg in example_messages], cls="chat-box", id="chatlist")
     html_object = show(Html(*headers, chatbox))
     display(html_object)
-    
 
-def display_chat_messages_as_html(msgs, theme:Literal["fasthml", "light", "dark"]='light', return_html=False):
+
+def display_chat_messages_as_html(msgs, theme: Literal["fasthml", "light", "dark"] = "light", return_html=False):
 
     from langchain_core.prompts.chat import MessageLikeRepresentation
-    
+
     if not isinstance(msgs[0], dict):
         from langchain_community.adapters.openai import convert_message_to_dict
+
         msgs = [convert_message_to_dict(msg) for msg in msgs]
     if theme == "fasthtml":
         return render_chat_messages_fasthtml(msgs)
@@ -246,10 +238,7 @@ def display_chat_messages_as_html(msgs, theme:Literal["fasthml", "light", "dark"
         # content = content.replace('&lt;', '<')
 
         content = (
-            content.replace("<br>", "TEMP_BR")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace("TEMP_BR", "<br>")
+            content.replace("<br>", "TEMP_BR").replace("<", "&lt;").replace(">", "&gt;").replace("TEMP_BR", "<br>")
         )
 
         if role in color_scheme:
@@ -320,9 +309,7 @@ def get_conversation_one_turn(
     if assistant_msg:
         messages.append({"role": "assistant", "content": assistant_msg})
     if assistant_prefix is not None:
-        assert (
-            return_format != "chatml"
-        ), "Change return_format to 'text' if you want to use assistant_prefix"
+        assert return_format != "chatml", "Change return_format to 'text' if you want to use assistant_prefix"
         assert messages[-1]["role"] == "user"
         msg = transform_messages(messages, "chatml", "text", add_generation_prompt=True)
         msg += assistant_prefix
@@ -349,13 +336,9 @@ def display_diff_two_string(text1, text2):
     table_rows = []
     for line in diff:
         if line.startswith("- "):
-            table_rows.append(
-                f'<tr><td style="background-color: #FFCCCB;">{line[2:]}</td><td></td></tr>'
-            )
+            table_rows.append(f'<tr><td style="background-color: #FFCCCB;">{line[2:]}</td><td></td></tr>')
         elif line.startswith("+ "):
-            table_rows.append(
-                f'<tr><td></td><td style="background-color: #CCFFCC;">{line[2:]}</td></tr>'
-            )
+            table_rows.append(f'<tr><td></td><td style="background-color: #CCFFCC;">{line[2:]}</td></tr>')
         elif line.startswith("? "):
             continue
         else:
@@ -426,6 +409,30 @@ def build_chatml_input(template: str, params: List[str]) -> Callable:
     return formator
 
 
+def _color_text(text, color_code):
+    """Helper function to color text based on the provided ANSI color code."""
+    return f"\033[{color_code}m{text}\033[0m"
+
+
+def inspect_msgs(messages):
+    """Prints the role and content of a list of messages with color-coded roles."""
+
+    color_map = {"system": "91", "user": "93", "assistant": "92", "unknown": "97"}  # Red  # Yellow  # Green  # White
+
+    for i, msg in enumerate(messages):
+        role = msg.get("role", "unknown").lower()
+        content = msg.get("content", "").strip()
+
+        # Get the appropriate color for the role
+        color_code = color_map.get(role, "97")  # Default to white for unknown
+        if i == len(messages) - 1:
+            color_code = "97"
+        colored_role = _color_text(f"{role.capitalize()}:\t{content}", color_code)
+
+        print(colored_role)
+        # print(content)
+        print("---" * 10)
+
 
 __all__ = [
     "transform_messages",
@@ -435,4 +442,5 @@ __all__ = [
     "display_diff_two_string",
     "display_conversations",
     "build_chatml_input",
+    "inspect_msgs",
 ]
