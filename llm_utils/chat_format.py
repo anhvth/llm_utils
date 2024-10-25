@@ -416,8 +416,9 @@ def _color_text(text, color_code):
 
 def inspect_msgs(messages):
     """Prints the role and content of a list of messages with color-coded roles."""
-
-    color_map = {"system": "91", "user": "93", "assistant": "92", "unknown": "97"}  # Red  # Yellow  # Green  # White
+    # handle input
+    messages = transform_messages_to_chatml(messages)
+    color_map = {"system": "91", "user": "93", "assistant": "96", "unknown": "94"}  # Red  # Yellow  # Green  # White
 
     for i, msg in enumerate(messages):
         role = msg.get("role", "unknown").lower()
@@ -425,12 +426,11 @@ def inspect_msgs(messages):
 
         # Get the appropriate color for the role
         color_code = color_map.get(role, "97")  # Default to white for unknown
-        if i == len(messages) - 1:
-            color_code = "97"
+        # if i == len(messages) - 1:
+        #     color_code = "97"
         colored_role = _color_text(f"{role.capitalize()}:\t{content}", color_code)
 
         print(colored_role)
-        # print(content)
         print("---" * 10)
 
 
