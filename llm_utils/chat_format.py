@@ -26,6 +26,9 @@ def _transform_sharegpt_to_chatml(item, default_system_message="You are a helpfu
     elif default_system_message:
         messages.append({"role": "system", "content": default_system_message})
     conversations = item.get("conversations", [])
+    if hasattr(conversations, "tolist"):
+        conversations = conversations.tolist()
+    # import ipdb; ipdb.set_trace()
     assert conversations, "The item does not have any conversations."
     for conversation in item.get("conversations", []):
         role = conversation["from"]
