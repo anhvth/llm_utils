@@ -464,30 +464,28 @@ def format_msgs(messages):
     return "\n".join(output)
 
 
-def inspect_msgs(messages, return_string=False):
+def inspect_msgs(messages):
     """Prints the role and content of a list of messages with color-coded roles."""
+    pass
 
-    formatted_msgs = format_msgs(messages)
-    if return_string:
-        return formatted_msgs
-
-    color_map = {
-        "system": "91",
-        "user": "93",
-        "assistant": "96",
-        "unknown": "94",
-    }  # Red  # Yellow  # Green  # White
-    for line in formatted_msgs.split("\n"):
-        if line.startswith("---"):
-            print(line)
-        else:
-            role, content = line.split(":\t", 1)
-            color_code = color_map.get(
-                role.lower(), "97"
-            )  # Default to white for unknown
-            colored_role = _color_text(f"{role}:\t{content}", color_code)
-            print(colored_role)
-            print("---" * 10)
+    # color_map = {
+    #     "system": "91",
+    #     "user": "93",
+    #     "assistant": "96",
+    #     "unknown": "94",
+    # }  # Red  # Yellow  # Green  # White
+    # for 
+    #     if line.startswith("---"):
+    #         print(line)
+    #     else:
+    #         role, content = line.split(":\t", 1)
+    #         color_code = color_map.get(
+    #             role.lower(), "97"
+    #         )  # Default to white for unknown
+    #         colored_role = _color_text(f"{role}:\t{content}", color_code)
+    #         print(colored_role)
+    #         print("---" * 10)
+    
 
 
 __all__ = [
