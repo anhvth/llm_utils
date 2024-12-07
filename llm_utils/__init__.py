@@ -1,7 +1,7 @@
 from llm_utils.tokenizers import get_tokenized_length
 
 from .chat_format import *
-from .client_loadbalancer import LLMClientLB
+from .openai_wraper import OpenAIWraper
 from .conversations import Conversation, Conversations, Message
 from .load_chat_dataset import load_chat_dataset
 from .meta_prompt import (
@@ -27,8 +27,7 @@ __all__ = [
     "generate_program_json",
     "generate_pydantic_parse_chain",
     "Example",
-    "LLMClientLB",
-    "LLMClientLB",
+    "OpenAIWraper",
 ]
 from . import chat_format, meta_prompt, text_utils
 
