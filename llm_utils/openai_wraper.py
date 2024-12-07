@@ -56,7 +56,7 @@ class OpenAIWraper:
         self.cache = cache
 
         self.clients = {
-        port: OpenAI(base_url=f"http://localhost:{port}/v1", **kwargs)
+            port: OpenAI(base_url=f"http://localhost:{port}/v1", **kwargs)
             for port in ports
         }
 
@@ -388,17 +388,15 @@ class OpenAIWraper:
         self,
         prompt: str = None,
         msgs: List[str] = None,
-        prefix=None,
+        prefix='',
         verbose=False,
         retrun_msgs=False,
         **kwargs,
     ) -> List[str]:
-        if prompt is None and msgs is None:
-            raise ValueError("Either prompt or msgs must be provided.")
         msgs = [{"role": "user", "content": prompt}] if prompt else msgs
         prompt_lm = self.apply_template(msgs, assistant_prefix=prefix)
         if verbose:
-            logger.debug(f"Prompt LM: {prompt_lm}")
+            print(f"Prompt LM:\n```{prompt_lm}```")
         choices = self.generate(prompt_lm, **kwargs).choices
         rets = []
         for choice in choices:
