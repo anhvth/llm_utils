@@ -1,4 +1,4 @@
-from copy import deepcopy as deeopcopy
+from copy import deepcopy
 from typing import Dict, List, Union
 
 from IPython.display import HTML, Markdown, display
@@ -58,7 +58,7 @@ def transform_messages(
         "sharegpt",
         "simulated_chat",
     ], "The output format is not recognized. Please specify the output format."
-    item = deeopcopy(item)
+    item = deepcopy(item)
 
     if tokenizer is not None:
         assert frm == "chatml", "Tokenizer is only supported for chatml format."
@@ -120,7 +120,7 @@ def transform_messages(
 
 def transform_messages_to_chatml(input_data, input_format="auto"):
     if input_format == "auto":
-        input_data = raw_data = deeopcopy(input_data)
+        input_data = raw_data = deepcopy(input_data)
         if isinstance(input_data, list):
             input_format = "chatlm"
             assert (
@@ -427,28 +427,6 @@ def format_msgs(messages):
     return "\n".join(output)
 
 
-def inspect_msgs(messages):
-    """Prints the role and content of a list of messages with color-coded roles."""
-    pass
-
-    # color_map = {
-    #     "system": "91",
-    #     "user": "93",
-    #     "assistant": "96",
-    #     "unknown": "94",
-    # }  # Red  # Yellow  # Green  # White
-    # for 
-    #     if line.startswith("---"):
-    #         print(line)
-    #     else:
-    #         role, content = line.split(":\t", 1)
-    #         color_code = color_map.get(
-    #             role.lower(), "97"
-    #         )  # Default to white for unknown
-    #         colored_role = _color_text(f"{role}:\t{content}", color_code)
-    #         print(colored_role)
-    #         print("---" * 10)
-    
 
 
 __all__ = [

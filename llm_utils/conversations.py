@@ -45,10 +45,12 @@ class Message(BaseModel):
         return html_content
 
 
-from langchain_core.messages import HumanMessage, BaseMessage, SystemMessage, AIMessage
-from langchain_community.adapters.openai import convert_openai_messages
-from pydantic import BaseModel
 from typing import List, Optional
+
+from langchain_community.adapters.openai import convert_openai_messages
+from langchain_core.messages import (AIMessage, BaseMessage, HumanMessage,
+                                     SystemMessage)
+from pydantic import BaseModel
 
 
 class Conversation(BaseModel):

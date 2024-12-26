@@ -1,7 +1,6 @@
 from llm_utils.tokenizers import get_tokenized_length
 
 from .chat_format import *
-from .openai_wraper import OpenAIWraper
 from .conversations import Conversation, Conversations, Message
 from .load_chat_dataset import load_chat_dataset
 from .meta_prompt import (
