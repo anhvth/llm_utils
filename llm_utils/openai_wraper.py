@@ -54,7 +54,6 @@ class OpenAIWraper:
         self.temperature = 0
         self.model = f"{model_name}"
         self.cache = cache
-
         self.clients = {
             port: OpenAI(base_url=f"http://localhost:{port}/v1", **kwargs)
             for port in ports
@@ -388,9 +387,10 @@ class OpenAIWraper:
         self,
         prompt: str = None,
         msgs: List[str] = None,
-        prefix='',
+        prefix="",
         verbose=False,
-        retrun_msgs=False,
+        # retrun_msgs=False,
+        return_dict=False,
         **kwargs,
     ) -> List[str]:
         msgs = [{"role": "user", "content": prompt}] if prompt else msgs
@@ -398,14 +398,25 @@ class OpenAIWraper:
         if verbose:
             print(f"Prompt LM:\n```{prompt_lm}```")
         choices = self.generate(prompt_lm, **kwargs).choices
-        rets = []
+        outputs = []
         for choice in choices:
             ai_msg = prefix + choice.text
             if choice.stop_reason == 151643:
                 ai_msg += "<|endoftext|>"
             elif choice.stop_reason:
                 ai_msg += choice.stop_reason
-            rets.append(ai_msg)
-        if retrun_msgs:
-            return rets, self.chatmltext_to_messages(prompt_lm)
-        return rets
+            outputs.append(ai_msg)
+
+        if return_dict:
+            out_msgs = msgs
+            for output in outputs:
+                out_msgs += [{"role": "assistant", "content": output}]
+                
+            outputs = {
+                "prompt": prompt_lm,
+                "choices": choices,
+                "outputs": outputs,
+                "msgs": msgs,
+            }
+
+        return outputs

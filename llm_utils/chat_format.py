@@ -193,7 +193,11 @@ def display_chat_messages_as_html(
     msgs, theme: Literal["fasthml", "light", "dark"] = "light", return_html=False
 ):
 
-    from langchain_core.prompts.chat import MessageLikeRepresentation
+    from langchain_core.messages import convert_to_openai_messages
+    from langchain_core.messages.base import BaseMessage
+
+    if isinstance(msgs[0], BaseMessage):
+        msgs = convert_to_openai_messages(msgs)
 
     if not isinstance(msgs[0], dict):
         from langchain_community.adapters.openai import convert_message_to_dict
@@ -474,7 +478,7 @@ def inspect_msgs(messages):
     #     "assistant": "96",
     #     "unknown": "94",
     # }  # Red  # Yellow  # Green  # White
-    # for 
+    # for
     #     if line.startswith("---"):
     #         print(line)
     #     else:
@@ -485,7 +489,6 @@ def inspect_msgs(messages):
     #         colored_role = _color_text(f"{role}:\t{content}", color_code)
     #         print(colored_role)
     #         print("---" * 10)
-    
 
 
 __all__ = [
