@@ -437,6 +437,5 @@ __all__ = [
     "display_diff_two_string",
     "display_conversations",
     "build_chatml_input",
-    "inspect_msgs",
     "format_msgs",
 ]
