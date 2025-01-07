@@ -1,5 +1,4 @@
 from .chat_format import *
-from .conversations import Conversation, Conversations, Message
 from .load_chat_dataset import load_chat_dataset
 from .meta_prompt import (
     Example,
@@ -13,9 +12,6 @@ from .text_utils import *
 
 __all__ = [
     "load_chat_dataset",
-    "Conversations",
-    "Message",
-    "Conversation",
     "get_prompt_template",
     "get_langchain_openai_model",
     "generate_program_json",
