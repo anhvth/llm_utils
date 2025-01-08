@@ -164,7 +164,7 @@ def display_chat_messages_as_html(
 
         msgs = [convert_message_to_dict(msg) for msg in msgs]
 
-    elif theme == "light":
+    if theme == "light":
         color_scheme = {
             "system": {
                 "background": "#FFAAAA",
@@ -214,7 +214,21 @@ def display_chat_messages_as_html(
     conversation_html = ""
     for i, message in enumerate(msgs):
         role = message["role"]
-        content = message["content"]
+        content = message.get("content", "")
+        if not content:
+            content = ""
+        
+        
+            
+        tool_calls = message.get('tool_calls')
+        if not content and tool_calls:
+            # each tool call comes with name, and args
+
+            for tool_call in tool_calls:
+                tool_call = tool_call['function']
+                name = tool_call['name']
+                args = tool_call['arguments']
+                content +=  "Tool: " + name + "\n"+ "Arguments: " + str(args)
 
         # Replace newlines with <br> tags
         content = content.replace("\n", "<br>")
@@ -242,16 +256,14 @@ def display_chat_messages_as_html(
             text_color = color_scheme["default"]["text"]
 
         if role == "system":
-            conversation_html += f'<div style="background-color: {background_color}; color: {text_color}; padding: 10px; margin-bottom: 10px;"><strong>System:</strong><br><pre id="system-{i}">{content}</pre><br><button onclick="copyContent(\'system-{i}\')">Copy</button></div>'
+            conversation_html += f'<div style="background-color: {background_color}; color: {text_color}; padding: 10px; margin-bottom: 10px;"><strong>System:</strong><br><pre id="system-{i}">{content}</pre></div>'
         elif role == "user":
-            conversation_html += f'<div style="background-color: {background_color}; color: {text_color}; padding: 10px; margin-bottom: 10px;"><strong>User:</strong><br><pre id="user-{i}">{content}</pre><br><button onclick="copyContent(\'user-{i}\')">Copy</button></div>'
+            conversation_html += f'<div style="background-color: {background_color}; color: {text_color}; padding: 10px; margin-bottom: 10px;"><strong>User:</strong><br><pre id="user-{i}">{content}</pre></div>'
         elif role == "assistant":
-            conversation_html += f'<div style="background-color: {background_color}; color: {text_color}; padding: 10px; margin-bottom: 10px;"><strong>Assistant:</strong><br><pre id="assistant-{i}">{content}</pre><br><button onclick="copyContent(\'assistant-{i}\')">Copy</button></div>'
+            conversation_html += f'<div style="background-color: {background_color}; color: {text_color}; padding: 10px; margin-bottom: 10px;"><strong>Assistant:</strong><br><pre id="assistant-{i}">{content}</pre></div>'
         elif role == "function":
-            conversation_html += f'<div style="background-color: {background_color}; color: {text_color}; padding: 10px; margin-bottom: 10px;"><strong>Function:</strong><br><pre id="function-{i}">{content}</pre><br><button onclick="copyContent(\'function-{i}\')">Copy</button></div>'
-            # Add a copy button for each message
+            conversation_html += f'<div style="background-color: {background_color}; color: {text_color}; padding: 10px; margin-bottom: 10px;"><strong>Function:</strong><br><pre id="function-{i}">{content}</pre></div>'
         else:
-
             logger.warning(f"Unknown role: {role}")
             conversation_html += f'<div style="background-color: {background_color}; color: {text_color}; padding: 10px; margin-bottom: 10px;"><strong>{role}:</strong><br><pre id="{role}-{i}">{content}</pre><br><button onclick="copyContent(\'{role}-{i}\')">Copy</button></div>'
 
