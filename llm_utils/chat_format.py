@@ -154,7 +154,7 @@ from typing import Literal
 
 
 def display_chat_messages_as_html(
-    msgs, theme: Literal["light", "dark"] = "light", return_html=False
+    msgs, return_html=False, file="/tmp/conversation.html", theme="light"
 ):
 
     from langchain_core.prompts.chat import MessageLikeRepresentation
@@ -164,52 +164,29 @@ def display_chat_messages_as_html(
 
         msgs = [convert_message_to_dict(msg) for msg in msgs]
 
-    if theme == "light":
-        color_scheme = {
-            "system": {
-                "background": "#FFAAAA",
-                "text": "#000000",
-            },  # Light red background, black text
-            "user": {
-                "background": "#AAFFAA",
-                "text": "#000000",
-            },  # Light green background, black text
-            "assistant": {
-                "background": "#AAAAFF",
-                "text": "#000000",
-            },  # Light blue background, black text
-            "function": {
-                "background": "#AFFFFF",
-                "text": "#000000",
-            },  # Light yellow background, black text
-            "default": {
-                "background": "#FFFFFF",
-                "text": "#000000",
-            },  # White background, black text
-        }
-    else:  # For dark theme or other themes
-        color_scheme = {
-            "system": {
-                "background": "#D9534F",
-                "text": "#FFFFFF",
-            },  # Darker red background, white text
-            "user": {
-                "background": "#5CB85C",
-                "text": "#FFFFFF",
-            },  # Darker green background, white text
-            "assistant": {
-                "background": "#5BC0DE",
-                "text": "#FFFFFF",
-            },  # Darker blue background, white text
-            "function": {
-                "background": "#F0AD4E",
-                "text": "#FFFFFF",
-            },  # Darker yellow background, white text
-            "default": {
-                "background": "#2C3E50",
-                "text": "#FFFFFF",
-            },  # Dark slate background, white text
-        }
+    color_scheme = {
+        "system": {
+            "background": "#FFAAAA",
+            "text": "#000000",
+        },  # Light red background, black text
+        "user": {
+            "background": "#AAFFAA",
+            "text": "#000000",
+        },  # Light green background, black text
+        "assistant": {
+            "background": "#AAAAFF",
+            "text": "#000000",
+        },  # Light blue background, black text
+        "function": {
+            "background": "#AFFFFF",
+            "text": "#000000",
+        },  # Light yellow background, black text
+        "default": {
+            "background": "#FFFFFF",
+            "text": "#000000",
+        },  # White background, black text
+        "tool": {"background": "#FFAAFF", "text": "#000000"},
+    }
 
     conversation_html = ""
     for i, message in enumerate(msgs):
@@ -217,18 +194,16 @@ def display_chat_messages_as_html(
         content = message.get("content", "")
         if not content:
             content = ""
-        
-        
-            
-        tool_calls = message.get('tool_calls')
+
+        tool_calls = message.get("tool_calls")
         if not content and tool_calls:
             # each tool call comes with name, and args
 
             for tool_call in tool_calls:
-                tool_call = tool_call['function']
-                name = tool_call['name']
-                args = tool_call['arguments']
-                content +=  "Tool: " + name + "\n"+ "Arguments: " + str(args)
+                tool_call = tool_call["function"]
+                name = tool_call["name"]
+                args = tool_call["arguments"]
+                content += "Tool: " + name + "\n" + "Arguments: " + str(args)
 
         # Replace newlines with <br> tags
         content = content.replace("\n", "<br>")
@@ -264,7 +239,7 @@ def display_chat_messages_as_html(
         elif role == "function":
             conversation_html += f'<div style="background-color: {background_color}; color: {text_color}; padding: 10px; margin-bottom: 10px;"><strong>Function:</strong><br><pre id="function-{i}">{content}</pre></div>'
         else:
-            logger.warning(f"Unknown role: {role}")
+            # logger.warning(f"Unknown role: {role}")
             conversation_html += f'<div style="background-color: {background_color}; color: {text_color}; padding: 10px; margin-bottom: 10px;"><strong>{role}:</strong><br><pre id="{role}-{i}">{content}</pre><br><button onclick="copyContent(\'{role}-{i}\')">Copy</button></div>'
 
     html = f"""
@@ -294,6 +269,10 @@ def display_chat_messages_as_html(
     </body>
     </html>
     """
+
+    if file:
+        with open(file, "w") as f:
+            f.write(html)
     if return_html:
         return html
     else:
@@ -437,8 +416,6 @@ def format_msgs(messages):
         output.append("---")
 
     return "\n".join(output)
-
-
 
 
 __all__ = [
