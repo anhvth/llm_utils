@@ -470,7 +470,6 @@ from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import JsonOutputParser
 from loguru import logger
 from typing import Union
-from speedy_utils import imemoize_v2
 
 
 def get_prompt_template(
@@ -525,7 +524,7 @@ def get_prompt_template(
         temperature=0.0,
         max_tokens=max_tokens,
         **kwargs_openai,
-    ) # type: ignore
+    )  # type: ignore
 
     # Extract the instructions from the response
     instructions = response.choices[0].message.content
@@ -564,6 +563,7 @@ def get_prompt_template(
         if len(missing_variables) > 0:
             logger.warning(f"Missing input variables: {', '.join(missing_variables)}")
     return _langchain_template
+
 
 def get_langchain_openai_model(model: Union[str, ChatOpenAI], **kwargs) -> ChatOpenAI:
     if isinstance(model, str):
