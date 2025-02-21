@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llm_utils"
-version = "0.1.1"
+version = "0.1.0"
 authors = [
     {name = "Anh Vo"}
 ]
@@ -19,8 +19,3 @@ dependencies = [
     "faiss-cpu",
     "langchain-chroma"
 ]
-
-[tool.bumpversion]
-current_version = "0.1.1"
-commit = True
-tag = True
