@@ -14,8 +14,8 @@ fi
 git add -A
 git commit -m "Pre-version bump commit" || true
 
-# Bump version with allow-dirty flag - fixed argument order
-bump2version patch --allow-dirty --new-version ${VERSION}
+# Bump version (simplified command)
+bump2version --new-version ${VERSION} --allow-dirty patch
 
 # Build and install
 pip install .
