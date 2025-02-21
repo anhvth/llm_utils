@@ -6,3 +6,4 @@ venv/
 dist/
 build/
 .hypothesis/.env
+.env
