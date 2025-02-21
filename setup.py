@@ -3,7 +3,6 @@ from setuptools import setup, find_packages
 
 setup(
     name="llm_utils",
-    version="0.1.1",
     author="AnhVTH",
     author_email="anhvth.226@gmail.com",
     description="A small package for data processing",

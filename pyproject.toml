@@ -1,3 +1,26 @@
 [build-system]
-requires = ["setuptools >= 64", "dspy-ai"]
+requires = ["setuptools >= 64"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm_utils"
+version = "0.1.1"
+authors = [
+    {name = "Anh Vo"}
+]
+description = "Utility functions for LLM applications"
+dependencies = [
+    "numpy",
+    "pandas",
+    "langchain",
+    "langchain_core",
+    "langchain_openai",
+    "langchain_community",
+    "faiss-cpu",
+    "langchain-chroma"
+]
+
+[tool.bumpversion]
+current_version = "0.1.1"
+commit = True
+tag = True
