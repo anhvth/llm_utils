@@ -20,7 +20,7 @@ def get_random_key() -> str:
 def _extract_json_code_block(text: str) -> str:
     """
     Safely extract JSON from a triple-backtick code block if present.
-    
+
     Example of expected pattern:
         ```json
         {"key": "value"}
@@ -29,7 +29,7 @@ def _extract_json_code_block(text: str) -> str:
     try:
         if "```json" in text:
             # split on the first occurrence
-            text = text.split("```json", 1)[1]  
+            text = text.split("```json", 1)[1]
             # now split on the next ```
             text = text.split("```", 1)[0]
             return text.strip()
@@ -47,9 +47,7 @@ def _parse_dict(text: str):
         content = _extract_json_code_block(text)
         return eval(content)
     except Exception as e:
-        raise ValueError(
-            f"Unable to parse dictionary from text: {text[:100]}"
-        ) from e
+        raise ValueError(f"Unable to parse dictionary from text: {text[:100]}") from e
 
 
 def parse_response_as_json(raw_response: str):
@@ -58,7 +56,7 @@ def parse_response_as_json(raw_response: str):
     1. Direct `json.loads()` after cleaning out Markdown code fences.
     2. `ast.literal_eval()` after removing Python code fences.
     3. Fallback to custom `_parse_dict()` which uses `eval`.
-    
+
     Raises a ValueError if all attempts fail.
     """
     errors = []
@@ -121,8 +119,8 @@ def get_gemini_response(
 
     # -- If cache file exists and caching is enabled, load from cache
     if os.path.exists(cache_file) and use_cache:
-        response = load_json_or_pickle(cache_file)
-        return response
+        response_text = load_json_or_pickle(cache_file)
+        return response_text
 
     parsed_failures = 0
     for attempt in range(1, max_retries + 1):
@@ -130,17 +128,25 @@ def get_gemini_response(
             # Configure a random key and send the request
             key = get_random_key()
             genai.configure(api_key=key)
-            response = chat_session.send_message(input_msg).text
+            cache_text_file = cache_file.replace(".pkl", ".txt")
+            if os.path.exists(cache_text_file):
+                with open(cache_text_file, "r") as f:
+                    response_text = f.read()
+            else:
+                response_text = chat_session.send_message(input_msg).text
+                with open(cache_text_file, "w") as f:
+                    f.write(response_text)
 
             # Optionally parse the response as JSON
             if parse_as_json:
-                response = parse_response_as_json(response)
+                response_text = parse_response_as_json(response_text)
 
             # Cache if requested
             if use_cache:
-                dump_json_or_pickle(response, cache_file)
+                dump_json_or_pickle(response_text, cache_file)
+                os.remove(cache_text_file)
 
-            return response
+            return response_text
 
         except Exception as e:
             # -- Final attempt: re-raise the last error
@@ -152,7 +158,7 @@ def get_gemini_response(
 
             # -- Check for rate limiting or server errors
             if "429" in error_str or "500" in error_str:
-                if attempt>max_retries//2:
+                if attempt > max_retries // 2:
                     logger.warning(
                         f"[gemini] {attempt}/{max_retries} - Rate limit/server error for key=****{key[-4:]}, "
                         f"retrying in {delay_between_retries}s"
@@ -168,7 +174,9 @@ def get_gemini_response(
                     )
                     raise
                 # Adjust model temperature slightly to encourage a different output structure
-                current_temp = chat_session.model._generation_config.get("temperature", 0.0)
+                current_temp = chat_session.model._generation_config.get(
+                    "temperature", 0.0
+                )
                 new_temp = round(current_temp + 0.1, 2)
                 chat_session.model._generation_config["temperature"] = new_temp
                 parsed_failures += 1
@@ -179,5 +187,7 @@ def get_gemini_response(
                 continue
 
             # -- For other errors, log and raise immediately
-            logger.error(f"[gemini] {attempt}/{max_retries} - Unexpected error: {error_str}")
+            logger.error(
+                f"[gemini] {attempt}/{max_retries} - Unexpected error: {error_str}"
+            )
             raise

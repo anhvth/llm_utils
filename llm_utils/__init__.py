@@ -17,7 +17,6 @@ __all__ = [
     "generate_program_json",
     "generate_pydantic_parse_chain",
     "Example",
-    "OpenAIWraper",
     "get_gemini_response",
 ]
 from . import chat_format, meta_prompt, text_utils
