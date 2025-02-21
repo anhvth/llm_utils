@@ -1,4 +1,4 @@
-from .gemini import get_response
+from .gemini import get_gemini_response
 from .chat_format import *
 from .load_chat_dataset import load_chat_dataset
 from .meta_prompt import (
@@ -18,7 +18,7 @@ __all__ = [
     "generate_pydantic_parse_chain",
     "Example",
     "OpenAIWraper",
-    "get_response",
+    "get_gemini_response",
 ]
 from . import chat_format, meta_prompt, text_utils
 
