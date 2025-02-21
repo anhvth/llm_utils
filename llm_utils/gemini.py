@@ -152,10 +152,11 @@ def get_gemini_response(
 
             # -- Check for rate limiting or server errors
             if "429" in error_str or "500" in error_str:
-                logger.warning(
-                    f"[gemini] {attempt}/{max_retries} - Rate limit/server error for key=****{key[-4:]}, "
-                    f"retrying in {delay_between_retries}s"
-                )
+                if attempt>max_retries//2:
+                    logger.warning(
+                        f"[gemini] {attempt}/{max_retries} - Rate limit/server error for key=****{key[-4:]}, "
+                        f"retrying in {delay_between_retries}s"
+                    )
                 time.sleep(delay_between_retries)
                 continue
 
