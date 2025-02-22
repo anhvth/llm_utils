@@ -50,7 +50,9 @@ def _parse_dict(text: str):
         raise ValueError(f"Unable to parse dictionary from text: {text[:100]}") from e
 
 
-def parse_response_as_json(raw_response: str):
+def parse_response_as_json(
+    chat_session, raw_response: str, attempt: int = 0, max_attempts: int = 1
+):
     """
     Attempts to parse a response string as JSON using multiple methods in turn:
     1. Direct `json.loads()` after cleaning out Markdown code fences.
@@ -83,8 +85,23 @@ def parse_response_as_json(raw_response: str):
         errors.append(f"_parse_dict failed: {e}")
 
     # -- If all parsing methods fail, raise an error with aggregated messages.
+
+    # try:
+    #     if attempt < max_attempts:
+    #         print(raw_response)
+    #         chat_session.send_message(
+    #             "Unable to parse response using any method. Identify the issue and rewrite in in ```json block"
+    #         )
+    #         return parse_response_as_json(chat_session, raw_response, attempt + 1)
+    # except Exception as e:
+    #     errors.append(f"Unable to parse response using any method: {e}")
+
     error_msgs = "; ".join(errors)
     raise ValueError(f"Unable to parse response using any method: {error_msgs}")
+
+
+def fallback_json_parse(session, error_message):
+    pass
 
 
 def get_gemini_response(
@@ -139,7 +156,7 @@ def get_gemini_response(
 
             # Optionally parse the response as JSON
             if parse_as_json:
-                response_text = parse_response_as_json(response_text)
+                response_text = parse_response_as_json(chat_session, response_text)
 
             # Cache if requested
             if use_cache:
@@ -160,31 +177,18 @@ def get_gemini_response(
             if "429" in error_str or "500" in error_str:
                 if attempt > max_retries // 2:
                     logger.warning(
-                        f"[gemini] {attempt}/{max_retries} - Rate limit/server error for key=****{key[-4:]}, "
-                        f"retrying in {delay_between_retries}s"
+                        f"[gemini] {attempt}/{max_retries} - Rate limit/server error, retrying in {delay_between_retries}s"
                     )
                 time.sleep(delay_between_retries)
                 continue
 
             # -- Check for JSON parse failures
             if "Unable to parse" in error_str:
-                if parsed_failures >= max_parse_failures:
-                    logger.error(
-                        f"[gemini] {attempt}/{max_retries} - Exceeded max parse failures ({parsed_failures}). Aborting."
-                    )
-                    raise
-                # Adjust model temperature slightly to encourage a different output structure
-                current_temp = chat_session.model._generation_config.get(
-                    "temperature", 0.0
+                logger.error(
+                    f"[gemini-JSON parse error] attempt {attempt}/{max_retries} -  {error_str}"
                 )
-                new_temp = round(current_temp + 0.1, 2)
-                chat_session.model._generation_config["temperature"] = new_temp
-                parsed_failures += 1
-                logger.warning(
-                    f"[gemini] {attempt}/{max_retries} - JSON parse failed. "
-                    f"Increasing temperature to {new_temp} and retrying..."
-                )
-                continue
+
+                raise
 
             # -- For other errors, log and raise immediately
             logger.error(
