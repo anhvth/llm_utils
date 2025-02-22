@@ -151,6 +151,7 @@ def get_gemini_response(
                     response_text = f.read()
             else:
                 response_text = chat_session.send_message(input_msg).text
+                mkdir_or_exist(os.path.dirname(cache_text_file))
                 with open(cache_text_file, "w") as f:
                     f.write(response_text)
 
