@@ -118,7 +118,7 @@ def get_gemini_response(
     Retries on rate-limit errors (429/500) or parse failures.
     """
     if not isinstance(chat_session, ChatSession):
-        raise TypeError(f"Expected ChatSession, got {type(chat_session).__name__}")
+        raise TypeError(f"Unexpected ChatSession, got {type(chat_session).__name__}")
     if not isinstance(input_msg, str):
         raise TypeError("input_msg must be a string")
 
