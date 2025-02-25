@@ -5,6 +5,8 @@ import pandas as pd
 from tabulate import tabulate
 from transformers import AutoTokenizer
 
+from speedy_utils import multi_thread
+
 
 def split_indices_by_length(
     lengths: list[int],
@@ -81,7 +83,8 @@ def group_messages_by_len(
             ids = tokenizer.apply_chat_template(message["messages"][1:], tokenize=True)
             return len(ids)
 
-        lengths = [get_token_length(msg) for msg in messages]
+        # lengths = [get_token_length(msg) for msg in messages]
+        lengths = multi_thread(get_token_length, messages, workers=64)
         list_ids = split_indices_by_length(
             lengths,
             batch_size,
