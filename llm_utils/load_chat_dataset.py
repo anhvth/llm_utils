@@ -39,10 +39,3 @@ def load_chat_dataset(path, current_format='auto', return_format='chatml'):
         items = data
 
     return items
-
-
-if __name__ == '__main__':
-    sharegpts = load_chat_dataset('/anhvth5/data/chat-formated-dataset/legal/CCO_context_conversation_orchestration.json')
-    html = display_chat_messages_as_html(sharegpts[0])
-    with open('test.html', 'w') as f:
-        f.write(html)

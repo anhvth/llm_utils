@@ -4,12 +4,12 @@ import random
 import time
 
 import google.generativeai as genai
-from google.generativeai.generative_models import ChatSession
+from google.generativeai import ChatSession
 from loguru import logger
 from speedy_utils import *
 import ast
 
-KEYS: list[str] = os.getenv("GEMINI_KEYS").split()
+KEYS: list[str] = os.getenv("GEMINI_KEYS").split('|')
 
 
 def get_random_key() -> str:
@@ -115,7 +115,6 @@ def get_gemini_response(
 ):
     """
     Gets a response from a ChatSession, optionally caching results and parsing JSON.
-    Retries on rate-limit errors (429/500) or parse failures.
     """
     if not isinstance(chat_session, ChatSession):
         raise TypeError(f"Unexpected ChatSession, got {type(chat_session).__name__}")
@@ -176,10 +175,10 @@ def get_gemini_response(
 
             # -- Check for rate limiting or server errors
             if "429" in error_str or "500" in error_str:
-                if attempt > max_retries // 2:
-                    logger.warning(
-                        f"[gemini] {attempt}/{max_retries} - Rate limit/server error, retrying in {delay_between_retries}s"
-                    )
+                # if attempt > max_retries // 2:
+                logger.warning(
+                    f"[gemini] {attempt}/{max_retries } -Key: {key[-10:]}- Rate limit/server error, retrying in {delay_between_retries}s"
+                )
                 time.sleep(delay_between_retries)
                 continue
 
@@ -193,6 +192,6 @@ def get_gemini_response(
 
             # -- For other errors, log and raise immediately
             logger.error(
-                f"[gemini] {attempt}/{max_retries} - Unexpected error: {error_str}"
+                f"[gemini] {attempt}/{max_retries} - Unexpected error: {error_str}\nRemove this key: {key}"
             )
             raise
