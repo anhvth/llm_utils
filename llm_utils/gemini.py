@@ -8,8 +8,11 @@ from google.generativeai import ChatSession
 from loguru import logger
 from speedy_utils import *
 import ast
-
-KEYS: list[str] = os.getenv("GEMINI_KEYS").split('|')
+try:
+    KEYS: list[str] = os.getenv("GEMINI_KEYS").split('|')
+except AttributeError:
+    KEYS = [""]
+    logger.warning("No GEMINI_KEYS environment variable found. Gemini API will not work.")
 
 
 def get_random_key() -> str:
