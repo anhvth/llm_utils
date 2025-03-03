@@ -27,16 +27,23 @@ class Message(TypedDict):
 
 class ChatSession:
     def __init__(
-        self, lm: "OAI_LM", system_prompt: str = None, history: List[Message] = []
+        self,
+        lm: "OAI_LM",
+        system_prompt: str = None,
+        history: List[Message] = [],
+        callback=None,
     ):
         self.lm = deepcopy(lm)
         self.history = history
+        self.callback = callback
         if system_prompt:
             system_prompt = {
                 "role": "system",
                 "content": system_prompt,
             }
             self.history.insert(0, system_prompt)
+    def __len__(self):
+        return len(self.history)
 
     def __call__(
         self, text, response_format=None, display=True, max_prev_turns=3, **kwargs
@@ -45,35 +52,40 @@ class ChatSession:
         output = self.lm(
             messages=self.parse_history(), response_format=response_format, **kwargs
         )
+        # output could be a string or a pydantic model
         if isinstance(output, BaseModel):
-            self.history.append(
-                {"role": "assistant", "content": output}
-            )
+            self.history.append({"role": "assistant", "content": output})
         else:
             assert response_format is None
             self.history.append({"role": "assistant", "content": output})
         if display:
             self.inspect_history(max_prev_turns=max_prev_turns)
+
+        if self.callback:
+            self.callback(self, output)
         return output
 
     def parse_history(self, indent=0):
         parsed_history = []
         for m in self.history:
-            if isinstance(m['content'], str):
+            if isinstance(m["content"], str):
                 parsed_history.append(m)
-            elif isinstance(m['content'], BaseModel):
-                parsed_history.append({
-                    "role": m['role'],
-                    "content": m['content'].model_dump_json(indent=indent)
-                })
+            elif isinstance(m["content"], BaseModel):
+                parsed_history.append(
+                    {
+                        "role": m["role"],
+                        "content": m["content"].model_dump_json(indent=indent),
+                    }
+                )
             else:
                 raise ValueError(f"Unexpected content type: {type(m['content'])}")
         return parsed_history
-    
+
     def inspect_history(self, max_prev_turns=3):
         from llm_utils import display_chat_messages_as_html
+
         h = self.parse_history(indent=2)
-        display_chat_messages_as_html(h[-max_prev_turns*2:])
+        display_chat_messages_as_html(h[-max_prev_turns * 2 :])
 
 
 class OAI_LM(dspy.LM):
@@ -155,8 +167,16 @@ class OAI_LM(dspy.LM):
             return response_format(**json_repair.loads(result))
         return result
 
-    def get_session(self, system_prompt, history: List[Message] = []) -> ChatSession:
-        return ChatSession(self, system_prompt=system_prompt, history=history)
+    def get_session(
+        self, system_prompt, history: List[Message] = [], callback=None, **kwargs
+    ) -> ChatSession:
+        return ChatSession(
+            self,
+            system_prompt=system_prompt,
+            history=history,
+            callback=callback,
+            **kwargs,
+        )
 
     def dump_cache(self, id, result):
         try:
