@@ -166,12 +166,20 @@ class OAI_LM(dspy.LM):
             )
             result = self.load_cache(id)
         if not result:
-            result = super().__call__(
-                prompt=prompt,
-                messages=messages,
-                **kwargs,
-                response_format=response_format,
-            )[0]
+            try:
+                result = super().__call__(
+                    prompt=prompt,
+                    messages=messages,
+                    **kwargs,
+                    response_format=response_format,
+                )[0]
+            except litellm.exceptions.ContextWindowExceededError as e:
+                logger.error(f"Context window exceeded: {e}")
+                # raise e
+            except Exception as e:
+                logger.error(f"Error: {e}")
+                # raise e
+                
 
         if self.do_cache:
             self.dump_cache(id, result)

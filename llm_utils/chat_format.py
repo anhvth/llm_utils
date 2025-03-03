@@ -156,11 +156,13 @@ from typing import Literal
 def display_chat_messages_as_html(
     msgs, return_html=False, file="/tmp/conversation.html", theme="light"
 ):
+    try:
+        from langchain_core.prompts.chat import MessageLikeRepresentation
 
-    from langchain_core.prompts.chat import MessageLikeRepresentation
-
-    if not isinstance(msgs[0], dict):
-        from langchain_community.adapters.openai import convert_message_to_dict
+        if not isinstance(msgs[0], dict):
+            from langchain_community.adapters.openai import convert_message_to_dict
+    except ImportError:
+        logger.warning("Langchain is not installed. Please install it to use this feature.")
 
         msgs = [convert_message_to_dict(msg) for msg in msgs]
 
