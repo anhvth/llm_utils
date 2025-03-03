@@ -32,10 +32,12 @@ class ChatSession:
         system_prompt: str = None,
         history: List[Message] = [],
         callback=None,
+        response_format=None,
     ):
         self.lm = deepcopy(lm)
         self.history = history
         self.callback = callback
+        self.response_format = response_format
         if system_prompt:
             system_prompt = {
                 "role": "system",
@@ -49,6 +51,7 @@ class ChatSession:
     def __call__(
         self, text, response_format=None, display=True, max_prev_turns=3, **kwargs
     ) -> str | BaseModel:
+        response_format = response_format or self.response_format
         self.history.append({"role": "user", "content": text})
         output = self.lm(
             messages=self.parse_history(), response_format=response_format, **kwargs
@@ -86,7 +89,13 @@ class ChatSession:
         from llm_utils import display_chat_messages_as_html
 
         h = self.parse_history(indent=2)
-        display_chat_messages_as_html(h[-max_prev_turns * 2 :])
+        try:
+            from IPython.display import clear_output
+            clear_output()
+            display_chat_messages_as_html(h[-max_prev_turns * 2 :])
+        except:
+            pass
+            
 
 
 class OAI_LM(dspy.LM):
@@ -96,7 +105,7 @@ class OAI_LM(dspy.LM):
 
     def __init__(
         self,
-        model: str,
+        model: str=None,
         model_type: Literal["chat", "text"] = "chat",
         temperature: float = 0.0,
         max_tokens: int = 1000,
@@ -108,7 +117,11 @@ class OAI_LM(dspy.LM):
         launch_kwargs: Optional[dict[str, Any]] = None,
         **kwargs,
     ):
-
+        if model is None:
+            model = self.list_models(kwargs.get('base_url'))[0]
+            model = f'openai/{model}'
+            logger.info(f"Using default model: {model}")
+            
         super().__init__(
             model=model,
             model_type=model_type,
@@ -135,7 +148,7 @@ class OAI_LM(dspy.LM):
         id = None
         cache = cache if cache is not None else self.do_cache
         if response_format:
-            assert issubclass(response_format, BaseModel)
+            assert issubclass(response_format, BaseModel), f'response_format must be a pydantic model, {type(response_format)} provided'
 
         if cache:
             id = identify_uuid(
@@ -169,13 +182,18 @@ class OAI_LM(dspy.LM):
         return result
 
     def get_session(
-        self, system_prompt, history: List[Message] = [], callback=None, **kwargs
+        self, system_prompt, history: List[Message] = None, callback=None, response_format=None, **kwargs
     ) -> ChatSession:
+        if history is None:
+            history = []
+        else:
+            history = deepcopy(history)
         return ChatSession(
             self,
             system_prompt=system_prompt,
             history=history,
             callback=callback,
+            response_format=response_format,
             **kwargs,
         )
 
@@ -198,3 +216,10 @@ class OAI_LM(dspy.LM):
         except Exception as e:
             logger.warning(f"Cache load failed: {e}")
             return None
+        
+    def list_models(self, base_url):
+        import openai
+        base_url = base_url or self.kwargs['base_url']
+        client = openai.OpenAI(base_url=base_url)
+        page = client.models.list()
+        return [d.id for d in page.data]
