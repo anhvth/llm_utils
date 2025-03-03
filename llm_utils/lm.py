@@ -42,6 +42,7 @@ class ChatSession:
                 "content": system_prompt,
             }
             self.history.insert(0, system_prompt)
+
     def __len__(self):
         return len(self.history)
 
