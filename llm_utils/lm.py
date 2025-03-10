@@ -69,7 +69,7 @@ class ChatSession:
             self.callback(self, output)
         return output
 
-    def parse_history(self, indent=0):
+    def parse_history(self, indent=None):
         parsed_history = []
         for m in self.history:
             if isinstance(m["content"], str):
@@ -91,11 +91,11 @@ class ChatSession:
         h = self.parse_history(indent=2)
         try:
             from IPython.display import clear_output
+
             clear_output()
             display_chat_messages_as_html(h[-max_prev_turns * 2 :])
         except:
             pass
-            
 
 
 class OAI_LM(dspy.LM):
@@ -105,7 +105,7 @@ class OAI_LM(dspy.LM):
 
     def __init__(
         self,
-        model: str=None,
+        model: str = None,
         model_type: Literal["chat", "text"] = "chat",
         temperature: float = 0.0,
         max_tokens: int = 1000,
@@ -118,10 +118,10 @@ class OAI_LM(dspy.LM):
         **kwargs,
     ):
         if model is None:
-            model = self.list_models(kwargs.get('base_url'))[0]
-            model = f'openai/{model}'
+            model = self.list_models(kwargs.get("base_url"))[0]
+            model = f"openai/{model}"
             logger.info(f"Using default model: {model}")
-            
+
         super().__init__(
             model=model,
             model_type=model_type,
@@ -148,22 +148,25 @@ class OAI_LM(dspy.LM):
         id = None
         cache = cache if cache is not None else self.do_cache
         if response_format:
-            assert issubclass(response_format, BaseModel), f'response_format must be a pydantic model, {type(response_format)} provided'
-
+            assert issubclass(
+                response_format, BaseModel
+            ), f"response_format must be a pydantic model, {type(response_format)} provided"
+        result = None
         if cache:
-            id = identify_uuid(
-                str(
-                    [
-                        prompt,
-                        messages,
-                        (
-                            response_format.model_json_schema()
-                            if response_format
-                            else None
-                        ),
-                    ]
-                )
+            # max_tokens = kwargs.get("max_tokens", self.max_tokens)
+            _kwargs = {**self.kwargs, **kwargs}
+
+            s = str(
+                [
+                    prompt,
+                    messages,
+                    (response_format.model_json_schema() if response_format else None),
+                    _kwargs["temperature"],
+                    _kwargs["max_tokens"],
+                    self.model,
+                ]
             )
+            id = identify_uuid(s)
             result = self.load_cache(id)
         if not result:
             try:
@@ -172,25 +175,33 @@ class OAI_LM(dspy.LM):
                     messages=messages,
                     **kwargs,
                     response_format=response_format,
-                )[0]
+                )
+                if kwargs.get('n', 1) == 1:
+                    result = result[0]
             except litellm.exceptions.ContextWindowExceededError as e:
                 logger.error(f"Context window exceeded: {e}")
                 # raise e
             except Exception as e:
                 logger.error(f"Error: {e}")
                 # raise e
-                
 
         if self.do_cache:
             self.dump_cache(id, result)
         if response_format:
             import json_repair
-
-            return response_format(**json_repair.loads(result))
+            try:
+                return response_format(**json_repair.loads(result))
+            except Exception as e:
+                raise ValueError(f"Failed to parse response for {response_format}: {e}")
         return result
 
     def get_session(
-        self, system_prompt, history: List[Message] = None, callback=None, response_format=None, **kwargs
+        self,
+        system_prompt,
+        history: List[Message] = None,
+        callback=None,
+        response_format=None,
+        **kwargs,
     ) -> ChatSession:
         if history is None:
             history = []
@@ -224,10 +235,16 @@ class OAI_LM(dspy.LM):
         except Exception as e:
             logger.warning(f"Cache load failed: {e}")
             return None
-        
+
     def list_models(self, base_url):
         import openai
-        base_url = base_url or self.kwargs['base_url']
+
+        base_url = base_url or self.kwargs["base_url"]
         client = openai.OpenAI(base_url=base_url)
         page = client.models.list()
         return [d.id for d in page.data]
+    
+    @property
+    def client(self):
+        import openai
+        return openai.OpenAI(base_url=self.kwargs["base_url"])
