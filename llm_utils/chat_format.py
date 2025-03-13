@@ -156,6 +156,8 @@ from typing import Literal
 def display_chat_messages_as_html(
     msgs, return_html=False, file="/tmp/conversation.html", theme="light"
 ):
+    if isinstance(msgs, dict) and 'messages' in msgs:
+        msgs = msgs['messages']
     try:
         from langchain_core.prompts.chat import MessageLikeRepresentation
 
