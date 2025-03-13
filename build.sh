@@ -7,7 +7,8 @@ set -e
 git add -A
 git commit -m "Pre-version bump commit" || true
 
-# Bump version (simplified command)
+# Bump version
+# --allow-dirty permits version bumping even with uncommitted changes in the working directory
 bump2version --allow-dirty patch
 
 # Build and install
