@@ -9,13 +9,14 @@ authors = [
     {name = "Anh Vo"}
 ]
 description = "Utility functions for LLM applications"
+requires-python = ">3.9,<4.0"
 dependencies = [
     "numpy",
     "pandas",
-    "langchain",
-    "langchain_core",
-    "langchain_openai",
-    "langchain_community",
-    "faiss-cpu",
-    "langchain-chroma"
+    "google-generativeai (>=0.8.4,<0.9.0)",
+    "transformers (>=4.49.0,<5.0.0)",
+    "dspy (>=2.6.10,<3.0.0) ; python_full_version > \"3.9.0\" and python_version < \"3.13\"",
+    "langchain (>=0.3.20,<0.4.0)",
+    "langchain-core (>=0.3.41,<0.4.0)",
+    "langchain-openai (>=0.3.7,<0.4.0)"
 ]
