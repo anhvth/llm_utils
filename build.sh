@@ -7,14 +7,16 @@ set -e
 git add -A
 git commit -m "Pre-version bump commit" || true
 
+# Ensure the working directory is clean
+git diff-index --quiet HEAD --
+
 # Bump version
-# --allow-dirty permits version bumping even with uncommitted changes in the working directory
-bump2version --allow-dirty patch
+bump2version patch --allow-dirty
 
 # Build and install
 pip install .
 
 # Commit version bump
 git add -A
-git commit -m "Bump version to $(bump2version --dry-run --list patch | grep new_version | sed -r s,"^.*=",,)"
+git commit -m "Bump version to $(bump2version --allow-dirty --dry-run --list patch | grep new_version | sed -r s,"^.*=",,)"
 git push
