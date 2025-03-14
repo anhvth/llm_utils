@@ -449,3 +449,13 @@ class OAI_LMs:
         finally:
             with self.lock:
                 self.usage_counts[least_used_lm] -= 1
+
+    @classmethod
+    def from_ports(self, ports):
+        lms = [
+            OAI_LM(
+                base_url=f"http://localhost:{port}/v1",
+            )
+            for port in ports
+        ]
+        return OAI_LMs(lms=lms)
