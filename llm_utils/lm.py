@@ -140,7 +140,10 @@ class OAI_LM(dspy.LM):
         **kwargs,
     ) -> str | BaseModel:
         if retry_count > self.kwargs.get("num_retries", 3):
-            raise ValueError("Retry limit exceeded")
+            # raise ValueError("Retry limit exceeded")
+            error = kwargs.get("error")
+            logger.error(f"Retry limit exceeded")
+            raise error
         id = None
         cache = cache if cache is not None else self.do_cache
         if response_format:
@@ -176,8 +179,6 @@ class OAI_LM(dspy.LM):
             except litellm.exceptions.ContextWindowExceededError as e:
                 logger.error(f"Context window exceeded: {e}")
             except litellm.exceptions.APIError as e:
-                # sleep for a random time between 1 and 5 seconds
-                # logger.error(f"API Error: {e}")
                 time.sleep(random.randint(1, 3))
                 return self.__call__(
                     prompt=prompt,
@@ -195,11 +196,20 @@ class OAI_LM(dspy.LM):
             self.dump_cache(id, result)
         if response_format:
             import json_repair
-
             try:
                 return response_format(**json_repair.loads(result))
             except Exception as e:
-                raise ValueError(f"Failed to parse response for {response_format}: {e}")
+                # try again
+                return self.__call__(
+                    prompt=prompt,
+                    messages=messages,
+                    response_format=response_format,
+                    cache=cache,
+                    retry_count=retry_count + 1,
+                    error=e,
+                    **kwargs,
+                )
+                # raise ValueError(f"Failed to parse response for {response_format}: {e}")
         return result
 
     def get_session(
