@@ -111,10 +111,15 @@ class OAI_LM(dspy.LM):
         port=None,
         **kwargs,
     ):
+
+        model = model or kwargs.get("model_name")
+        if not model.startswith("openai/"):
+            model = f"openai/{model}"
         if port is not None:
             kwargs["base_url"] = f"http://localhost:{port}/v1"
-            if not os.environ.get('OPENAI_API_KEY'):
-                os.environ['OPENAI_API_KEY'] = 'abc'
+            if not os.environ.get("OPENAI_API_KEY"):
+                os.environ["OPENAI_API_KEY"] = "abc"
+            self.base_url = kwargs["base_url"]
         if model is None:
             model = self.list_models(kwargs.get("base_url"))[0]
             model = f"openai/{model}"
@@ -202,6 +207,7 @@ class OAI_LM(dspy.LM):
             self.dump_cache(id, result)
         if response_format:
             import json_repair
+
             try:
                 return response_format(**json_repair.loads(result))
             except Exception as e:
@@ -259,17 +265,23 @@ class OAI_LM(dspy.LM):
             logger.warning(f"Cache load failed: {e}")
             return None
 
-    def list_models(self, base_url):
+    def list_models(self, base_url=None):
         import openai
+
         base_url = base_url or self.kwargs["base_url"]
-        client = openai.OpenAI(base_url=base_url, api_key=os.getenv("OPENAI_API_KEY", "abc"))
+        client = openai.OpenAI(
+            base_url=base_url, api_key=os.getenv("OPENAI_API_KEY", "abc")
+        )
         page = client.models.list()
         return [d.id for d in page.data]
 
     @property
     def client(self):
         import openai
-        return openai.OpenAI(base_url=self.kwargs["base_url"], api_key=os.getenv("OPENAI_API_KEY", "abc"))
+
+        return openai.OpenAI(
+            base_url=self.kwargs["base_url"], api_key=os.getenv("OPENAI_API_KEY", "abc")
+        )
 
 
 # class FileLock:
