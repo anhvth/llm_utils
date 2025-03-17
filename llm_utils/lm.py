@@ -131,6 +131,7 @@ class OAI_LM(dspy.LM):
             provider=provider,
             finetuning_model=finetuning_model,
             launch_kwargs=launch_kwargs,
+            api_key=os.getenv("OPENAI_API_KEY", "abc"),
             **kwargs,
         )
         self.do_cache = cache
