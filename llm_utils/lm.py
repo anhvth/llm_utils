@@ -108,12 +108,17 @@ class OAI_LM(dspy.LM):
         provider=None,
         finetuning_model: Optional[str] = None,
         launch_kwargs: Optional[dict[str, Any]] = None,
+        port=None,
         **kwargs,
     ):
+        if port is not None:
+            kwargs["base_url"] = f"http://localhost:{port}/v1"
+            if not os.environ.get('OPENAI_API_KEY'):
+                os.environ['OPENAI_API_KEY'] = 'abc'
         if model is None:
             model = self.list_models(kwargs.get("base_url"))[0]
             model = f"openai/{model}"
-            # logger.info(f"Using default model: {model}")
+            logger.info(f"Using default model: {model}")
 
         super().__init__(
             model=model,
@@ -179,7 +184,7 @@ class OAI_LM(dspy.LM):
             except litellm.exceptions.ContextWindowExceededError as e:
                 logger.error(f"Context window exceeded: {e}")
             except litellm.exceptions.APIError as e:
-                time.sleep(random.randint(1, 3))
+                # time.sleep(random.randint(1, 3))
                 return self.__call__(
                     prompt=prompt,
                     messages=messages,
@@ -255,17 +260,15 @@ class OAI_LM(dspy.LM):
 
     def list_models(self, base_url):
         import openai
-
         base_url = base_url or self.kwargs["base_url"]
-        client = openai.OpenAI(base_url=base_url)
+        client = openai.OpenAI(base_url=base_url, api_key=os.getenv("OPENAI_API_KEY", "abc"))
         page = client.models.list()
         return [d.id for d in page.data]
 
     @property
     def client(self):
         import openai
-
-        return openai.OpenAI(base_url=self.kwargs["base_url"])
+        return openai.OpenAI(base_url=self.kwargs["base_url"], api_key=os.getenv("OPENAI_API_KEY", "abc"))
 
 
 # class FileLock:
