@@ -112,9 +112,7 @@ class OAI_LM(dspy.LM):
         **kwargs,
     ):
 
-        model = model or kwargs.get("model_name")
-        if not model.startswith("openai/"):
-            model = f"openai/{model}"
+      
         if port is not None:
             kwargs["base_url"] = f"http://localhost:{port}/v1"
             if not os.environ.get("OPENAI_API_KEY"):
@@ -124,6 +122,10 @@ class OAI_LM(dspy.LM):
             model = self.list_models(kwargs.get("base_url"))[0]
             model = f"openai/{model}"
             logger.info(f"Using default model: {model}")
+
+        if not model.startswith("openai/"):
+            model = f"openai/{model}"
+
 
         super().__init__(
             model=model,
