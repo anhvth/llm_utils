@@ -9,6 +9,7 @@ from typing import Any, List, Literal, Optional, TypedDict
 import dspy
 import litellm
 from loguru import logger
+import numpy as np
 from pydantic import BaseModel
 from speedy_utils import dump_json_or_pickle, identify_uuid, load_json_or_pickle
 
@@ -91,6 +92,59 @@ class ChatSession:
             pass
 
 
+def _update_port_use(port: int, increment: int):
+    """
+    Update the usage counter for a given port, safely with an exclusive lock
+    on a port-specific lock file.
+    """
+    file_counter = f"/tmp/port_use_counter_{port}.npy"
+    file_counter_lock = f"/tmp/port_use_counter_{port}.lock"
+
+    with open(file_counter_lock, "w") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        try:
+            if os.path.exists(file_counter):
+                counter = np.load(file_counter)
+            else:
+                counter = np.array([0])
+            counter[0] += increment
+            np.save(file_counter, counter)
+        finally:
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
+
+
+def _pick_least_used_port(ports: List[int]) -> int:
+    """
+    Pick the least-used port among the provided list, safely under a global lock.
+    """
+    global_lock_file = "/tmp/ports.lock"
+
+    # Acquire the global lock before reading/updating any port usage
+    with open(global_lock_file, "w") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        try:
+            port_use = {}
+            # Read usage for each port
+            for port in ports:
+                file_counter = f"/tmp/port_use_counter_{port}.npy"
+                if os.path.exists(file_counter):
+                    counter = np.load(file_counter)
+                else:
+                    counter = np.array([0])
+                port_use[port] = counter[0]
+
+            logger.debug(f"Port use: {port_use}")
+
+            # Pick the least-used port
+            lsp = min(port_use, key=port_use.get)
+
+            # Increment usage of that port
+            _update_port_use(lsp, 1)
+        finally:
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
+
+    return lsp
+
 class OAI_LM(dspy.LM):
     """
     A language model supporting chat or text completion requests for use with DSPy modules.
@@ -116,9 +170,7 @@ class OAI_LM(dspy.LM):
         self.ports = ports
         if ports is not None:
             port = ports[0]
-            self.lock = threading.Lock()
-            self.usage_counts = {port: 0 for port in ports}
-            
+
         if port is not None:
             kwargs["base_url"] = f"http://localhost:{port}/v1"
             if not os.environ.get("OPENAI_API_KEY"):
@@ -165,8 +217,6 @@ class OAI_LM(dspy.LM):
             logger.error(f"Retry limit exceeded")
             raise error
         # have multiple ports, and port is not specified
-
-        # if port is specified, use that port
 
         id = None
         cache = cache if cache is not None else self.do_cache
@@ -221,8 +271,7 @@ class OAI_LM(dspy.LM):
                 raise
             finally:
                 if port:
-                    with self.lock:
-                        self.usage_counts[port] -= 1
+                    _update_port_use(port, -1)
 
         if self.do_cache:
             self.dump_cache(id, result)
@@ -246,11 +295,7 @@ class OAI_LM(dspy.LM):
         return result
 
     def get_least_used_port(self):
-        with self.lock:
-                    # Find the LM with the least usage
-            least_used_port = min(self.usage_counts, key=self.usage_counts.get)
-            self.usage_counts[least_used_port] += 1
-            logger.debug(f"Using port: {least_used_port}, {self.usage_counts=}")
+        least_used_port = _pick_least_used_port(self.ports)
         port = least_used_port
         return port
 
@@ -315,36 +360,37 @@ class OAI_LM(dspy.LM):
 
 
 class OAI_LMs:
-    def __init__(self, lms: List[OAI_LM]):
-        self.lms = lms
-        self.lock = threading.Lock()
-        self.usage_counts = {lm: 0 for lm in lms}
-        self.last_log_time = time.time()
+    pass
+#     def __init__(self, lms: List[OAI_LM]):
+#         self.lms = lms
+#         self.lock = threading.Lock()
+#         self.usage_counts = {lm: 0 for lm in lms}
+#         self.last_log_time = time.time()
 
-    def __call__(self, *args, **kwargs):
-        with self.lock:
-            # Find the LM with the least usage
-            least_used_lm = min(self.usage_counts, key=self.usage_counts.get)
-            self.usage_counts[least_used_lm] += 1
+#     def __call__(self, *args, **kwargs):
+#         with self.lock:
+#             # Find the LM with the least usage
+#             least_used_lm = min(self.usage_counts, key=self.usage_counts.get)
+#             self.usage_counts[least_used_lm] += 1
 
-            # Log usage counts periodically
-            current_time = time.time()
-            if current_time - self.last_log_time > 10:
-                logger.debug(f"Usage counts: {self.usage_counts}")
-                self.last_log_time = current_time
+#             # Log usage counts periodically
+#             # current_time = time.time()
+#             # if current_time - self.last_log_time > 10:
+#             #     logger.debug(f"Usage counts: {self.usage_counts}")
+#             #     self.last_log_time = current_time
 
-        try:
-            return least_used_lm(*args, **kwargs)
-        finally:
-            with self.lock:
-                self.usage_counts[least_used_lm] -= 1
+#         try:
+#             return least_used_lm(*args, **kwargs)
+#         finally:
+#             with self.lock:
+#                 self.usage_counts[least_used_lm] -= 1
 
-    @classmethod
-    def from_ports(self, ports):
-        lms = [
-            OAI_LM(
-                base_url=f"http://localhost:{port}/v1",
-            )
-            for port in ports
-        ]
-        return OAI_LMs(lms=lms)
+#     @classmethod
+#     def from_ports(self, ports):
+#         lms = [
+#             OAI_LM(
+#                 base_url=f"http://localhost:{port}/v1",
+#             )
+#             for port in ports
+#         ]
+#         return OAI_LMs(lms=lms)
