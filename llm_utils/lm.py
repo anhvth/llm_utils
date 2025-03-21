@@ -109,15 +109,22 @@ class OAI_LM(dspy.LM):
         finetuning_model: Optional[str] = None,
         launch_kwargs: Optional[dict[str, Any]] = None,
         port=None,
+        ports=None,
         **kwargs,
     ):
 
-      
+        self.ports = ports
+        if ports is not None:
+            port = ports[0]
+            self.lock = threading.Lock()
+            self.usage_counts = {port: 0 for port in ports}
+            
         if port is not None:
             kwargs["base_url"] = f"http://localhost:{port}/v1"
             if not os.environ.get("OPENAI_API_KEY"):
                 os.environ["OPENAI_API_KEY"] = "abc"
             self.base_url = kwargs["base_url"]
+
         if model is None:
             model = self.list_models(kwargs.get("base_url"))[0]
             model = f"openai/{model}"
@@ -125,7 +132,6 @@ class OAI_LM(dspy.LM):
 
         if not model.startswith("openai/"):
             model = f"openai/{model}"
-
 
         super().__init__(
             model=model,
@@ -150,6 +156,7 @@ class OAI_LM(dspy.LM):
         response_format: BaseModel = None,
         cache=None,
         retry_count=0,
+        port=None,
         **kwargs,
     ) -> str | BaseModel:
         if retry_count > self.kwargs.get("num_retries", 3):
@@ -157,6 +164,10 @@ class OAI_LM(dspy.LM):
             error = kwargs.get("error")
             logger.error(f"Retry limit exceeded")
             raise error
+        # have multiple ports, and port is not specified
+
+        # if port is specified, use that port
+
         id = None
         cache = cache if cache is not None else self.do_cache
         if response_format:
@@ -180,6 +191,10 @@ class OAI_LM(dspy.LM):
             id = identify_uuid(s)
             result = self.load_cache(id)
         if not result:
+            if self.ports and not port:
+                port = self.get_least_used_port()
+            if port:
+                kwargs["base_url"] = f"http://localhost:{port}/v1"
             try:
                 result = super().__call__(
                     prompt=prompt,
@@ -192,18 +207,22 @@ class OAI_LM(dspy.LM):
             except litellm.exceptions.ContextWindowExceededError as e:
                 logger.error(f"Context window exceeded: {e}")
             except litellm.exceptions.APIError as e:
-                # time.sleep(random.randint(1, 3))
                 return self.__call__(
                     prompt=prompt,
                     messages=messages,
                     response_format=response_format,
                     cache=cache,
                     retry_count=retry_count + 1,
+                    port=port,
                     **kwargs,
                 )
             except Exception as e:
                 logger.error(f"Error: {e}")
                 raise
+            finally:
+                if port:
+                    with self.lock:
+                        self.usage_counts[port] -= 1
 
         if self.do_cache:
             self.dump_cache(id, result)
@@ -225,6 +244,15 @@ class OAI_LM(dspy.LM):
                 )
                 # raise ValueError(f"Failed to parse response for {response_format}: {e}")
         return result
+
+    def get_least_used_port(self):
+        with self.lock:
+                    # Find the LM with the least usage
+            least_used_port = min(self.usage_counts, key=self.usage_counts.get)
+            self.usage_counts[least_used_port] += 1
+            logger.debug(f"Using port: {least_used_port}, {self.usage_counts=}")
+        port = least_used_port
+        return port
 
     def get_session(
         self,
@@ -284,173 +312,6 @@ class OAI_LM(dspy.LM):
         return openai.OpenAI(
             base_url=self.kwargs["base_url"], api_key=os.getenv("OPENAI_API_KEY", "abc")
         )
-
-
-# class FileLock:
-#     """
-#     A simple context manager for POSIX file locking.
-#     """
-
-#     def __init__(self, lock_path):
-#         self.lock_path = lock_path
-#         self.fd = None
-
-#     def __enter__(self):
-#         # Open the lock file in write mode, creating it if necessary
-#         self.fd = open(self.lock_path, "w")
-#         # Acquire an exclusive lock on the file
-#         fcntl.flock(self.fd, fcntl.LOCK_EX)
-#         return self
-
-#     def __exit__(self, exc_type, exc_val, exc_tb):
-#         # Release the lock
-#         fcntl.flock(self.fd, fcntl.LOCK_UN)
-#         self.fd.close()
-#         self.fd = None
-
-
-# class FileClock:
-#     """
-#     A clock that persists its last checkpoint to a file and uses file locking
-#     to ensure synchronization among multiple processes.
-#     """
-
-#     def __init__(
-#         self,
-#         clock_file="/tmp/clock_checkpoint.txt",
-#         clock_lock_file="/tmp/clock_checkpoint.lock",
-#     ):
-#         self._clock_file = clock_file
-#         self._clock_lock_file = clock_lock_file
-
-#         # If file doesn't exist, create it with the current time
-#         with FileLock(self._clock_lock_file):
-#             if not os.path.exists(self._clock_file):
-#                 with open(self._clock_file, "w") as f:
-#                     f.write(str(time.time()))
-
-#             # Read the last tick from disk
-#             with open(self._clock_file, "r") as f:
-#                 self._last_tick = float(f.read().strip())
-
-#     def current_time(self):
-#         return time.time()
-
-#     def time_since_last_checkpoint(self):
-#         """
-#         Return time elapsed (in seconds) since the last checkpoint
-#         (read from file).  We re-read the file here, in case some
-#         other process has updated it since our last read.
-#         """
-#         with FileLock(self._clock_lock_file):
-#             with open(self._clock_file, "r") as f:
-#                 last_tick = float(f.read().strip())
-#         return self.current_time() - last_tick
-
-#     def tick(self):
-#         """
-#         Update the checkpoint time to now. Writes the new time to the file.
-#         """
-#         with FileLock(self._clock_lock_file):
-#             new_tick = self.current_time()
-#             with open(self._clock_file, "w") as f:
-#                 f.write(str(new_tick))
-#             self._last_tick = new_tick
-
-
-# class OAI_LMs(OAI_LM):
-#     def __init__(self, ports, *args, use_locks=False, **kwargs):
-#         self.ports = ports
-#         self.default_port = kwargs["base_url"].split(":")[-1].replace("/v1", "")
-#         self.base_urls = []
-#         self.counter_files = {}
-#         self.use_locks = use_locks
-#         for port in ports:
-#             base_url = kwargs["base_url"].replace(self.default_port, str(port))
-#             self.base_urls.append(base_url)
-#             self.counter_files[base_url] = f"/tmp/counter_{port}.txt"
-#             if os.path.exists(f"/tmp/counter_{port}.txt"):
-#                 os.remove(f"/tmp/counter_{port}.txt")
-#         # Initialize the parent class
-#         super().__init__(*args, **kwargs)
-
-#         # A single file lock used to protect updates to counter files
-#         self._lock_file_path = "/tmp/oai_lms_filelock.lock"
-
-#         # Ensure that each counter file exists and is initialized to zero
-#         for url, fpath in self.counter_files.items():
-#             if not os.path.exists(fpath):
-#                 with open(fpath, "w") as f:
-#                     f.write("0")
-
-#         # Use our synchronized Clock
-#         self.clock = FileClock()
-
-#     def __call__(self, *args, **kwargs):
-#         """
-#         Select the URL with the fewest active requests, increment its count,
-#         call the API, then decrement the count.
-#         """
-#         if self.use_locks:
-#             with FileLock(self._lock_file_path):
-#                 target_url = self._select_target_url()
-#                 self._increment_counter(target_url)
-#         else:
-#             target_url = self._select_target_url()
-#             self._increment_counter(target_url)
-
-#         # Update the base_url for the request
-#         kwargs["base_url"] = target_url
-
-#         try:
-#             # Perform the actual call
-#             result = super().__call__(*args, **kwargs)
-#         finally:
-#             if self.use_locks:
-#                 with FileLock(self._lock_file_path):
-#                     self._decrement_counter(target_url)
-#             else:
-#                 self._decrement_counter(target_url)
-
-#         return result
-
-#     def _select_target_url(self):
-#         """Select the URL with the fewest active requests."""
-#         in_flight = {
-#             url: self._read_counter(file_path)
-#             for url, file_path in self.counter_files.items()
-#         }
-#         return min(in_flight, key=in_flight.get)
-
-#     def _increment_counter(self, target_url):
-#         """Increment the counter for the target URL."""
-#         self._write_counter(self.counter_files[target_url], self._read_counter(self.counter_files[target_url]) + 1)
-
-#     def _decrement_counter(self, target_url):
-#         """Decrement the counter for the target URL."""
-#         current_value = self._read_counter(self.counter_files[target_url])
-#         self._write_counter(self.counter_files[target_url], current_value - 1)
-
-#         # Optionally log the in-flight counts every ~10 seconds
-#         if self.clock.time_since_last_checkpoint() > 10:
-#             in_flight = {
-#                 url: self._read_counter(file_path)
-#                 for url, file_path in self.counter_files.items()
-#             }
-#             logger.debug(f"In-flight request counts: {in_flight}")
-#             self.clock.tick()
-
-#     def _read_counter(self, file_path):
-#         """Read the integer counter from a file."""
-#         if not os.path.exists(file_path):
-#             return 0
-#         with open(file_path, "r") as f:
-#             return int(f.read().strip())
-
-#     def _write_counter(self, file_path, value):
-#         """Write an integer counter to a file."""
-#         with open(file_path, "w") as f:
-#             f.write(str(value))
 
 
 class OAI_LMs:
