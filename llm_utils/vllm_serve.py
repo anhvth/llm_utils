@@ -89,10 +89,10 @@ def add_lora(
         
     logger.info(f'LOra name: {lora_name_or_path}')
     url = url.replace("HOST:PORT", host_port)
-    lora_path = os.path.join(LORA_DIR, served_model_name)
-    # logger.warning(
-    #     f"{  lora_path=} should be updated to the container that host the lora at /loras/{lora_name}"
-    # )
+    if not lora_name_or_path.startswith(LORA_DIR):
+        lora_path = os.path.join(LORA_DIR, served_model_name)
+    else:
+        lora_path = lora_name_or_path
     logger.info(f'{url=}')
     try:
         unload_lora(lora_name_or_path, host_port=host_port)

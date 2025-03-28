@@ -205,17 +205,19 @@ class OAI_LM(dspy.LM):
         provider=None,
         finetuning_model: Optional[str] = None,
         launch_kwargs: Optional[dict[str, Any]] = None,
+        host='localhost',
         port=None,
         ports=None,
         **kwargs,
     ):
 
         self.ports = ports
+        self.host = host
         if ports is not None:
             port = ports[0]
 
         if port is not None:
-            kwargs["base_url"] = f"http://localhost:{port}/v1"
+            kwargs["base_url"] = f"http://{host}:{port}/v1"
             if not os.environ.get("OPENAI_API_KEY"):
                 os.environ["OPENAI_API_KEY"] = "abc"
             self.base_url = kwargs["base_url"]
@@ -294,7 +296,7 @@ class OAI_LM(dspy.LM):
                     port = random.choice(self.ports)
 
             if port:
-                kwargs["base_url"] = f"http://localhost:{port}/v1"
+                kwargs["base_url"] = f"http://{self.host}:{port}/v1"
             try:
                 result = super().__call__(
                     prompt=prompt,
