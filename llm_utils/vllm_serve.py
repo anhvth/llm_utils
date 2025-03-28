@@ -1,3 +1,4 @@
+from glob import glob
 import os
 import subprocess
 import time
@@ -61,34 +62,40 @@ def add_lora(
     host_port: str = "localhost:8150",
     served_model_name:str = None
 ) -> dict:
-    
-    if os.isdir(lora_name_or_path):
+    if os.path.exists(lora_name_or_path):
+        assert served_model_name, "served_model_name is required when lora_name_or_path is a path"
         # should be located at LORA_DIR/{LORA_NAME}
         lora_name_or_path = os.path.abspath(lora_name_or_path)
         if not lora_name_or_path.startswith(LORA_DIR):
             # copy to LORA_DIR
+            paths = glob(f"{lora_name_or_path}/*")
             import shutil
-            target_dir = os.path.join(LORA_DIR, lora_name_or_path)
-            # clean target dir if exists
-            if os.path.isdir(target_dir):
-                shutil.rmtree(target_dir)
-            shutil.copytree(lora_name_or_path, target_dir)
-            lora_name_or_path = target_dir
-            logger.info(f"Copying LoRA to {target_dir}")
+            target_dir = os.path.join(LORA_DIR, served_model_name)
+            # if os.path.isdir(target_dir):
+            #     shutil.rmtree(target_dir)
+            # do not copy the
+            #copy everything except folder
+            os.makedirs(target_dir, exist_ok=True)
+            for path in paths:
+                if os.path.isfile(path):
+                    try:
+                        print(f"Copying {path} to {target_dir}")
+                        shutil.copy(path, target_dir)
+                    except:
+                        pass
+            # shutil.copytree(lora_name_or_path, target_dir)
+    else:
+        served_model_name = lora_name_or_path.split(LORA_DIR)[1].strip("/")
         
-        
-    
-    if 'loras' in lora_name_or_path:
-        lora_name_or_path = lora_name_or_path.split('loras/')[-1]
     logger.info(f'LOra name: {lora_name_or_path}')
     url = url.replace("HOST:PORT", host_port)
-    lora_path = os.path.join(LORA_DIR, lora_name_or_path)
+    lora_path = os.path.join(LORA_DIR, served_model_name)
     # logger.warning(
     #     f"{  lora_path=} should be updated to the container that host the lora at /loras/{lora_name}"
     # )
     logger.info(f'{url=}')
     try:
-        unload_lora(lora_name_or_path, port)
+        unload_lora(lora_name_or_path, host_port=host_port)
     except Exception as e:
         pass
     headers = {"Content-Type": "application/json"}
@@ -129,7 +136,6 @@ def unload_lora(lora_name, host_port):
         response.raise_for_status()
         logger.success(f"Unloaded LoRA adapter: {lora_name}")
     except requests.exceptions.RequestException as e:
-        logger.error(f"Request failed: {str(e)}")
         return {"error": f"Request failed: {str(e)}"}
 
 
