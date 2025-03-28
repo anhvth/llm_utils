@@ -1,6 +1,7 @@
 import fcntl
 import os
 import random
+import tempfile
 import threading
 import time
 from copy import deepcopy
@@ -92,10 +93,36 @@ class ChatSession:
             pass
 
 
+def _clear_port_use(ports):
+    """
+    Clear the usage counters for all ports.
+    """
+    for port in ports:
+        file_counter = f"/tmp/port_use_counter_{port}.npy"
+        if os.path.exists(file_counter):
+            os.remove(file_counter)
+
+
+def _atomic_save(array: np.ndarray, filename: str):
+    """
+    Write `array` to `filename` with an atomic rename to avoid partial writes.
+    """
+    # The temp file must be on the same filesystem as `filename` to ensure
+    # that os.replace() is truly atomic.
+    tmp_dir = os.path.dirname(filename) or "."
+    with tempfile.NamedTemporaryFile(dir=tmp_dir, delete=False) as tmp:
+        np.save(tmp, array)
+        temp_name = tmp.name
+
+    # Atomically rename the temp file to the final name.
+    # On POSIX systems, os.replace is an atomic operation.
+    os.replace(temp_name, filename)
+
+
 def _update_port_use(port: int, increment: int):
     """
     Update the usage counter for a given port, safely with an exclusive lock
-    on a port-specific lock file.
+    and atomic writes to avoid file corruption.
     """
     file_counter = f"/tmp/port_use_counter_{port}.npy"
     file_counter_lock = f"/tmp/port_use_counter_{port}.lock"
@@ -103,23 +130,32 @@ def _update_port_use(port: int, increment: int):
     with open(file_counter_lock, "w") as lock_file:
         fcntl.flock(lock_file, fcntl.LOCK_EX)
         try:
+            # If file exists, load it. Otherwise assume zero usage.
             if os.path.exists(file_counter):
-                counter = np.load(file_counter)
+                try:
+                    counter = np.load(file_counter)
+                except Exception as e:
+                    # If we fail to load (e.g. file corrupted), start from zero
+                    logger.warning(f"Corrupted usage file {file_counter}: {e}")
+                    counter = np.array([0])
             else:
                 counter = np.array([0])
+
+            # Increment usage and atomically overwrite the old file
             counter[0] += increment
-            np.save(file_counter, counter)
+            _atomic_save(counter, file_counter)
+
         finally:
             fcntl.flock(lock_file, fcntl.LOCK_UN)
 
 
 def _pick_least_used_port(ports: List[int]) -> int:
     """
-    Pick the least-used port among the provided list, safely under a global lock.
+    Pick the least-used port among the provided list, safely under a global lock
+    so that no two processes pick a port at the same time.
     """
     global_lock_file = "/tmp/ports.lock"
 
-    # Acquire the global lock before reading/updating any port usage
     with open(global_lock_file, "w") as lock_file:
         fcntl.flock(lock_file, fcntl.LOCK_EX)
         try:
@@ -128,7 +164,12 @@ def _pick_least_used_port(ports: List[int]) -> int:
             for port in ports:
                 file_counter = f"/tmp/port_use_counter_{port}.npy"
                 if os.path.exists(file_counter):
-                    counter = np.load(file_counter)
+                    try:
+                        counter = np.load(file_counter)
+                    except Exception as e:
+                        # If the file is corrupted, reset usage to 0
+                        logger.warning(f"Corrupted usage file {file_counter}: {e}")
+                        counter = np.array([0])
                 else:
                     counter = np.array([0])
                 port_use[port] = counter[0]
@@ -140,10 +181,12 @@ def _pick_least_used_port(ports: List[int]) -> int:
 
             # Increment usage of that port
             _update_port_use(lsp, 1)
+
         finally:
             fcntl.flock(lock_file, fcntl.LOCK_UN)
 
     return lsp
+
 
 class OAI_LM(dspy.LM):
     """
@@ -209,6 +252,8 @@ class OAI_LM(dspy.LM):
         cache=None,
         retry_count=0,
         port=None,
+        error=None,
+        use_loadbalance=None,
         **kwargs,
     ) -> str | BaseModel:
         if retry_count > self.kwargs.get("num_retries", 3):
@@ -242,7 +287,12 @@ class OAI_LM(dspy.LM):
             result = self.load_cache(id)
         if not result:
             if self.ports and not port:
-                port = self.get_least_used_port()
+                if use_loadbalance:
+
+                    port = self.get_least_used_port()
+                else:
+                    port = random.choice(self.ports)
+
             if port:
                 kwargs["base_url"] = f"http://localhost:{port}/v1"
             try:
@@ -270,7 +320,7 @@ class OAI_LM(dspy.LM):
                 logger.error(f"Error: {e}")
                 raise
             finally:
-                if port:
+                if port and use_loadbalance:
                     _update_port_use(port, -1)
 
         if self.do_cache:
@@ -293,6 +343,9 @@ class OAI_LM(dspy.LM):
                 )
                 # raise ValueError(f"Failed to parse response for {response_format}: {e}")
         return result
+
+    def clear_port_use(self):
+        _clear_port_use(self.ports)
 
     def get_least_used_port(self):
         least_used_port = _pick_least_used_port(self.ports)
@@ -361,6 +414,8 @@ class OAI_LM(dspy.LM):
 
 class OAI_LMs:
     pass
+
+
 #     def __init__(self, lms: List[OAI_LM]):
 #         self.lms = lms
 #         self.lock = threading.Lock()
