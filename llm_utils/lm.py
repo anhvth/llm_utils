@@ -208,6 +208,7 @@ class OAI_LM(dspy.LM):
         host='localhost',
         port=None,
         ports=None,
+        api_key=None,
         **kwargs,
     ):
 
@@ -218,8 +219,8 @@ class OAI_LM(dspy.LM):
 
         if port is not None:
             kwargs["base_url"] = f"http://{host}:{port}/v1"
-            if not os.environ.get("OPENAI_API_KEY"):
-                os.environ["OPENAI_API_KEY"] = "abc"
+            # if not os.environ.get("OPENAI_API_KEY"):
+            #     os.environ["OPENAI_API_KEY"] = "abc"
             self.base_url = kwargs["base_url"]
 
         if model is None:
@@ -241,7 +242,7 @@ class OAI_LM(dspy.LM):
             provider=provider,
             finetuning_model=finetuning_model,
             launch_kwargs=launch_kwargs,
-            api_key=os.getenv("OPENAI_API_KEY", "abc"),
+            api_key=api_key or os.getenv("OPENAI_API_KEY", "abc"),
             **kwargs,
         )
         self.do_cache = cache
