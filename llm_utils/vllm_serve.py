@@ -8,6 +8,10 @@ import argparse
 import requests
 
 
+LORA_DIR = os.environ.get("LORA_DIR", "/loras")
+LORA_DIR = os.path.abspath(LORA_DIR)
+logger.info(f"LORA_DIR: {LORA_DIR}")
+
 def kill_existing_vllm(vllm_binary: Optional[str] = None) -> None:
     """Kill selected vLLM processes using fzf."""
     if not vllm_binary:
@@ -52,27 +56,44 @@ def kill_existing_vllm(vllm_binary: Optional[str] = None) -> None:
 
 
 def add_lora(
-    lora_name: str,
+    lora_name_or_path: str,
     url: str = "http://HOST:PORT/v1/load_lora_adapter",
     host_port: str = "localhost:8150",
     served_model_name:str = None
 ) -> dict:
-    if 'loras' in lora_name:
-        lora_name = lora_name.split('loras/')[-1]
-    logger.info(f'LOra name: {lora_name}')
+    
+    if os.isdir(lora_name_or_path):
+        # should be located at LORA_DIR/{LORA_NAME}
+        lora_name_or_path = os.path.abspath(lora_name_or_path)
+        if not lora_name_or_path.startswith(LORA_DIR):
+            # copy to LORA_DIR
+            import shutil
+            target_dir = os.path.join(LORA_DIR, lora_name_or_path)
+            # clean target dir if exists
+            if os.path.isdir(target_dir):
+                shutil.rmtree(target_dir)
+            shutil.copytree(lora_name_or_path, target_dir)
+            lora_name_or_path = target_dir
+            logger.info(f"Copying LoRA to {target_dir}")
+        
+        
+    
+    if 'loras' in lora_name_or_path:
+        lora_name_or_path = lora_name_or_path.split('loras/')[-1]
+    logger.info(f'LOra name: {lora_name_or_path}')
     url = url.replace("HOST:PORT", host_port)
-    lora_path = os.path.join("/loras/", lora_name)
+    lora_path = os.path.join(LORA_DIR, lora_name_or_path)
     # logger.warning(
     #     f"{  lora_path=} should be updated to the container that host the lora at /loras/{lora_name}"
     # )
     logger.info(f'{url=}')
     try:
-        unload_lora(lora_name, port)
+        unload_lora(lora_name_or_path, port)
     except Exception as e:
         pass
     headers = {"Content-Type": "application/json"}
-    lora_name = served_model_name or lora_name
-    data = {"lora_name": lora_name, "lora_path": lora_path}
+    lora_name_or_path = served_model_name or lora_name_or_path
+    data = {"lora_name": lora_name_or_path, "lora_path": lora_path}
     logger.info(f"{data=}")
     # logger.warning(f"Failed to unload LoRA adapter: {str(e)}")
     try:
