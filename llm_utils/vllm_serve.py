@@ -153,6 +153,7 @@ def serve(
     is_bnb: bool = False,
     eager: bool = False,
     chat_template: Optional[str] = None,  # Added parameter
+    lora_modules: Optional[str] = None,
 ):
     """Main function to start or kill vLLM containers."""
 
@@ -217,7 +218,8 @@ def serve(
         if chat_template:
             chat_template = get_chat_template(chat_template)
             cmd.extend(["--chat-template", chat_template])  # Add chat_template argument
-
+        if lora_modules:
+            cmd.extend(["--lora-modules", lora_modules])
         # add kwargs
         final_cmd = " ".join(cmd)
         log_file = f"/tmp/vllm_{port}.txt"
@@ -312,7 +314,11 @@ def get_args():
         type=str,
         help="Path to the chat template file",
     )  # Added argument
-    
+    parser.add_argument(
+        "--lora_modules",
+        type=str,
+        help="Path to the LoRA modules file",
+    )  # Added argument
     return parser.parse_args()
 from speedy_utils import memoize
 
@@ -367,6 +373,7 @@ def main():
             args.bnb,
             args.eager,
             args.chat_template,  # Pass chat_template argument
+            args.lora_modules,
         )
             
     elif args.mode == "kill":
