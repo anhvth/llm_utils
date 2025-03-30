@@ -11,6 +11,7 @@ import requests
 
 LORA_DIR = os.environ.get("LORA_DIR", "/loras")
 LORA_DIR = os.path.abspath(LORA_DIR)
+HF_HOME = os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
 logger.info(f"LORA_DIR: {LORA_DIR}")
 
 def kill_existing_vllm(vllm_binary: Optional[str] = None) -> None:
@@ -150,8 +151,8 @@ def serve(
     max_model_len: int = 8192,
     enable_lora: bool = False,
     is_bnb: bool = False,
-    not_verbose=True,
-    extra_args: Optional[List[str]] = [],
+    eager: bool = False,
+    chat_template: Optional[str] = None,  # Added parameter
 ):
     """Main function to start or kill vLLM containers."""
 
@@ -196,6 +197,11 @@ def serve(
             "--disable-log-requests",
             "--uvicorn-log-level critical"
         ]
+        if HF_HOME:
+            # insert
+            cmd.insert(0, f"HF_HOME={HF_HOME}")
+        if eager:
+            cmd.append("--enforce-eager")
 
         if served_model_name:
             cmd.extend(["--served-model-name", served_model_name])
@@ -207,11 +213,12 @@ def serve(
 
         if enable_lora:
             cmd.extend(["--fully-sharded-loras", "--enable-lora"])
+        
+        if chat_template:
+            chat_template = get_chat_template(model)
+            cmd.extend(["--chat-template", chat_template])  # Add chat_template argument
+
         # add kwargs
-        if extra_args:
-            for name_param in extra_args:
-                name, param = name_param.split("=")
-                cmd.extend([f"{name}", param])
         final_cmd = " ".join(cmd)
         log_file = f"/tmp/vllm_{port}.txt"
         final_cmd_with_log = f'"{final_cmd} 2>&1 | tee {log_file}"'
@@ -297,9 +304,51 @@ def get_args():
     parser.add_argument(
         "--host_port", type=str, default="HOST:PORT", help="Host to serve the model"
     )
+    parser.add_argument(
+        "--eager", action="store_true", help="Enable eager execution"
+    )
+    parser.add_argument(
+        "--chat_template",
+        type=str,
+        help="Path to the chat template file",
+    )  # Added argument
+    
     return parser.parse_args()
+from speedy_utils import memoize
 
+@memoize
+def get_chat_template(model_name):
+    from transformers import AutoTokenizer
 
+    # Initialize the tokenizer for Qwen2.5-0.5B-Instruct
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+    # Get the chat template used by the model
+    chat_template = tokenizer.chat_template
+
+    # Print the template to understand its structure
+    print("Chat template for Qwen2.5-0.5B-Instruct:")
+    print(chat_template)
+
+    # Example of formatting a simple conversation
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Hello, how are you?"}
+    ]
+
+    # Apply the template to format the conversation
+    formatted_prompt = tokenizer.apply_chat_template(
+        messages, 
+        tokenize=False, 
+        add_generation_prompt=True
+    )
+
+    print("\nFormatted conversation example:")
+    print(formatted_prompt)
+    fie = f'/tmp/chat_template_{model_name.replace('/', '_')}.txt'
+    with open(fie, 'w') as f:
+        f.write(chat_template)
+    return fie
 def main():
     """Main entry point for the script."""
 
@@ -316,9 +365,10 @@ def main():
             args.max_model_len,
             args.enable_lora,
             args.bnb,
-            args.not_verbose,
-            args.extra_args,
+            args.eager,
+            args.chat_template,  # Pass chat_template argument
         )
+            
     elif args.mode == "kill":
         kill_existing_vllm(args.vllm_binary)
     elif args.mode == "add_lora":
