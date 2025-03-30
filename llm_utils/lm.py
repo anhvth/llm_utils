@@ -257,12 +257,12 @@ class OAI_LM(dspy.LM):
         port=None,
         error=None,
         use_loadbalance=None,
+        must_load_cache=False,
         **kwargs,
     ) -> str | BaseModel:
         if retry_count > self.kwargs.get("num_retries", 3):
             # raise ValueError("Retry limit exceeded")
-            error = kwargs.get("error")
-            logger.error(f"Retry limit exceeded")
+            logger.error(f"Retry limit exceeded, error: {error}")
             raise error
         # have multiple ports, and port is not specified
 
@@ -299,6 +299,8 @@ class OAI_LM(dspy.LM):
             if port:
                 kwargs["base_url"] = f"http://{self.host}:{port}/v1"
             try:
+                if must_load_cache:
+                    raise ValueError("Expected to load from cache but got None, maybe previous call failed so it didn't save to cache")
                 result = super().__call__(
                     prompt=prompt,
                     messages=messages,
@@ -317,6 +319,7 @@ class OAI_LM(dspy.LM):
                     cache=cache,
                     retry_count=retry_count + 1,
                     port=port,
+                    error=e,
                     **kwargs,
                 )
             except Exception as e:
@@ -330,7 +333,6 @@ class OAI_LM(dspy.LM):
             self.dump_cache(id, result)
         if response_format:
             import json_repair
-
             try:
                 return response_format(**json_repair.loads(result))
             except Exception as e:

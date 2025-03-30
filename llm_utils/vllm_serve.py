@@ -192,11 +192,10 @@ def serve(
             dtype,
             "--max-model-len",
             str(max_model_len),
-            "--disable-log-requests",
             "--enable-prefix-caching",
+            "--disable-log-requests",
+            "--uvicorn-log-level critical"
         ]
-        if not_verbose or True:
-            cmd += ["--uvicorn-log-level critical"]
 
         if served_model_name:
             cmd.extend(["--served-model-name", served_model_name])
@@ -265,7 +264,7 @@ def get_args():
         default=0.9,
         help="GPU memory utilization",
     )
-    parser.add_argument("--dtype", type=str, default="bfloat16", help="Data type")
+    parser.add_argument("--dtype", type=str, default="auto", help="Data type")
     parser.add_argument(
         "--max_model_len", type=int, default=8192, help="Maximum model length"
     )
@@ -284,7 +283,7 @@ def get_args():
     parser.add_argument("--vllm_binary", type=str, help="Path to the vLLM binary")
     parser.add_argument("--lora_name", type=str, help="Name of the LoRA adapter")
     parser.add_argument(
-        "--pipeline-parallel",
+        "--pipeline_parallel",
         "-pp",
         default=1,
         type=int,
