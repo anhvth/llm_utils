@@ -215,7 +215,7 @@ def serve(
             cmd.extend(["--fully-sharded-loras", "--enable-lora"])
         
         if chat_template:
-            chat_template = get_chat_template(model)
+            chat_template = get_chat_template(chat_template)
             cmd.extend(["--chat-template", chat_template])  # Add chat_template argument
 
         # add kwargs
