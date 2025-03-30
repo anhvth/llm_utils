@@ -2,7 +2,7 @@ from glob import glob
 import os
 import subprocess
 import time
-from typing import List, Optional
+from typing import List, Literal, Optional
 from fastcore.script import call_parse
 from loguru import logger
 import argparse
@@ -320,41 +320,54 @@ def get_args():
         help="Path to the LoRA modules file",
     )  # Added argument
     return parser.parse_args()
-from speedy_utils import memoize
+from speedy_utils import jloads, memoize
 
-def get_chat_template(model_name):
-    file_path = f'/tmp/chat_template_{model_name.replace("/", "_")}.jinja2'
-    if os.path.exists(file_path):
-        print(f"Chat template already exists at {file_path}")
-        return file_path
-    from transformers import AutoTokenizer
-    import jinja2
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    chat_template = tokenizer.chat_template
+def fetch_chat_template(template_name: str = 'qwen') -> str:
+    """
+    Fetches a chat template file from a remote repository or local cache.
 
-    # Validate Jinja2 format
-    try:
-        jinja2.Template(chat_template)
-    except jinja2.TemplateSyntaxError as e:
-        raise ValueError(f"Invalid Jinja2 template format: {e}")
+    Args:
+        template_name (str): Name of the chat template. Defaults to 'qwen'.
 
-    messages = [
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "Hello, how are you?"}
+    Returns:
+        str: Path to the downloaded or cached chat template file.
+
+    Raises:
+        AssertionError: If the template_name is not supported.
+        ValueError: If the file URL is invalid.
+    """
+    supported_templates = [
+        'alpaca', 'chatml', 'gemma-it', 'llama-2-chat', 
+        'mistral-instruct', 'qwen2.5-instruct', 'saiga', 
+        'vicuna', 'qwen'
     ]
-
-    formatted_prompt = tokenizer.apply_chat_template(
-        messages, 
-        tokenize=False, 
-        add_generation_prompt=True
+    assert template_name in supported_templates, (
+        f"Chat template '{template_name}' not supported. "
+        f"Please choose from {supported_templates}."
     )
 
-    with open(file_path, 'w') as f:
-        f.write(chat_template)
+    # Map 'qwen' to 'qwen2.5-instruct'
+    if template_name == 'qwen':
+        template_name = 'qwen2.5-instruct'
 
-    print(f"Chat template saved to {file_path}")
-    return file_path
+    remote_url = (
+        f'https://raw.githubusercontent.com/chujiezheng/chat_templates/'
+        f'main/chat_templates/{template_name}.jinja'
+    )
+    local_cache_path = f'/tmp/chat_template_{template_name}.jinja'
+
+    if remote_url.startswith("http"):
+        import requests
+        response = requests.get(remote_url)
+        with open(local_cache_path, 'w') as file:
+            file.write(response.text)
+        return local_cache_path
+
+    raise ValueError("The file URL must be a valid HTTP URL.")
+
+    
+    
 
 def main():
     """Main entry point for the script."""
