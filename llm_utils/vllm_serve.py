@@ -367,7 +367,8 @@ def fetch_chat_template(template_name: str = 'qwen') -> str:
     raise ValueError("The file URL must be a valid HTTP URL.")
 
     
-    
+def get_chat_template(template_name: str) -> str:
+    return fetch_chat_template(template_name)
 
 def main():
     """Main entry point for the script."""
