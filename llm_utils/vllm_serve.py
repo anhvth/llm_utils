@@ -322,39 +322,40 @@ def get_args():
     return parser.parse_args()
 from speedy_utils import memoize
 
-@memoize
 def get_chat_template(model_name):
+    file_path = f'/tmp/chat_template_{model_name.replace("/", "_")}.jinja2'
+    if os.path.exists(file_path):
+        print(f"Chat template already exists at {file_path}")
+        return file_path
     from transformers import AutoTokenizer
+    import jinja2
 
-    # Initialize the tokenizer for Qwen2.5-0.5B-Instruct
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-    # Get the chat template used by the model
     chat_template = tokenizer.chat_template
 
-    # Print the template to understand its structure
-    print("Chat template for Qwen2.5-0.5B-Instruct:")
-    print(chat_template)
+    # Validate Jinja2 format
+    try:
+        jinja2.Template(chat_template)
+    except jinja2.TemplateSyntaxError as e:
+        raise ValueError(f"Invalid Jinja2 template format: {e}")
 
-    # Example of formatting a simple conversation
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "Hello, how are you?"}
     ]
 
-    # Apply the template to format the conversation
     formatted_prompt = tokenizer.apply_chat_template(
         messages, 
         tokenize=False, 
         add_generation_prompt=True
     )
 
-    print("\nFormatted conversation example:")
-    print(formatted_prompt)
-    fie = f'/tmp/chat_template_{model_name.replace('/', '_')}.txt'
-    with open(fie, 'w') as f:
+    with open(file_path, 'w') as f:
         f.write(chat_template)
-    return fie
+
+    print(f"Chat template saved to {file_path}")
+    return file_path
+
 def main():
     """Main entry point for the script."""
 
