@@ -44,7 +44,7 @@ class ChatSession:
         return len(self.history)
 
     def __call__(
-        self, text, response_format=None, display=True, max_prev_turns=3, **kwargs
+        self, text, response_format=None, display=True, max_prev_turns=3,**kwargs
     ) -> str | BaseModel:
         response_format = response_format or self.response_format
         self.history.append({"role": "user", "content": text})
@@ -247,6 +247,10 @@ class OAI_LM(dspy.LM):
         )
         self.do_cache = cache
 
+    @property
+    def last_message(self):
+        return self.history[-1]['response'].model_dump()['choices'][0]['message']
+
     def __call__(
         self,
         prompt=None,
@@ -346,7 +350,6 @@ class OAI_LM(dspy.LM):
                     error=e,
                     **kwargs,
                 )
-                # raise ValueError(f"Failed to parse response for {response_format}: {e}")
         return result
 
     def clear_port_use(self):
@@ -415,7 +418,25 @@ class OAI_LM(dspy.LM):
         return openai.OpenAI(
             base_url=self.kwargs["base_url"], api_key=os.getenv("OPENAI_API_KEY", "abc")
         )
-
+    @classmethod
+    def get_deepseek_chat(self, api_key=None, max_tokens=2000, **kwargs):
+        return OAI_LM(
+            base_url="https://api.deepseek.com/v1",
+            model="deepseek-chat",
+            api_key=api_key or os.environ["DEEPSEEK_API_KEY"],
+            max_tokens=max_tokens,
+            **kwargs,
+            )
+    @classmethod
+    def get_deepseek_reasoner(self, api_key=None, max_tokens=2000, **kwargs):
+        return OAI_LM(
+            base_url="https://api.deepseek.com/v1",
+            model="deepseek-reasoner",
+            api_key=api_key or os.environ["DEEPSEEK_API_KEY"],
+            max_tokens=max_tokens,
+            **kwargs,
+        )
+    
 
 class OAI_LMs:
     pass
