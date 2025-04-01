@@ -1,13 +1,15 @@
 """"
 USAGE:
-Serve loras with vLLM
-svllm serve -lm LOR_NAME LORA_PATH -g 0123
+Serve models and LoRAs with vLLM:
 
-# serve model
-svllm serve -m model_name -g 0123
+Serve a LoRA model:
+svllm serve --lora LORA_NAME LORA_PATH --gpus GPU_GROUPS
 
-# add lora to served model
-svllm add_lora -m PAT_TO_LORA -served_model_name LORA_NAME -g 0123
+Serve a base model:
+svllm serve --model MODEL_NAME --gpus GPU_GROUPS
+
+Add a LoRA to a served model:
+svllm add-lora --lora LORA_NAME LORA_PATH --host_port host:port (if add then the port must be specify)
 """
 
 from glob import glob
@@ -275,8 +277,9 @@ def get_vllm():
 def get_args():
     """Parse command line arguments."""
     example_args = [
-        "svllm add_lora --model LOra_name --host localhost:8150",
-        "svllm add_lora lora_name@path:port",
+        "svllm serve --model MODEL_NAME --gpus 0,1,2,3",
+        "svllm serve --lora LORA_NAME LORA_PATH --gpus 0,1,2,3",
+        "svllm add-lora --lora LORA_NAME LORA_PATH --host_port localhost:8150",
         "svllm kill",
     ]
 
@@ -284,17 +287,21 @@ def get_args():
         description="vLLM Serve Script", epilog="Example: " + " || ".join(example_args)
     )
     parser.add_argument(
-        "mode", choices=["serve", "kill", "add_lora", "unload_lora"], help="Mode to run the script in"
+        "mode", choices=["serve", "kill", "add-lora", "unload-lora"], help="Mode to run the script in"
     )
     parser.add_argument("--model", "-m", type=str, help="Model to serve")
     parser.add_argument(
-        "--gpu_groups", "-g", type=str, help="Comma-separated list of GPU groups"
+        "--gpus", "-g", type=str, help="Comma-separated list of GPU groups", dest="gpu_groups"
+    )
+    parser.add_argument(
+        "--lora", "-l", nargs=2, metavar=("LORA_NAME", "LORA_PATH"), 
+        help="Name and path of the LoRA adapter"
     )
     parser.add_argument(
         "--served_model_name", type=str, help="Name of the served model"
     )
     parser.add_argument(
-        "--port_start", '-p',type=int, default=8155, help="Starting port number"
+        "--port_start", '-p', type=int, default=8155, help="Starting port number"
     )
     parser.add_argument(
         "--gpu_memory_utilization",
@@ -306,12 +313,11 @@ def get_args():
     parser.add_argument(
         "--max_model_len", type=int, default=8192, help="Maximum model length"
     )
-    # parser.add_argument("--enable_lora", action="store_true", help="Enable LoRA")
     parser.add_argument(
         "--disable_lora",
         dest="enable_lora",
         action="store_false",
-        help="Enable LoRA",
+        help="Disable LoRA support",
         default=True,
     )
     parser.add_argument("--bnb", action="store_true", help="Enable quantization")
@@ -319,7 +325,6 @@ def get_args():
         "--not_verbose", action="store_true", help="Disable verbose logging"
     )
     parser.add_argument("--vllm_binary", type=str, help="Path to the vLLM binary")
-    parser.add_argument("--lora_name", type=str, help="Name of the LoRA adapter")
     parser.add_argument(
         "--pipeline_parallel",
         "-pp",
@@ -333,7 +338,7 @@ def get_args():
         help="Additional arguments for the serve command",
     )
     parser.add_argument(
-        "--host_port", type=str, default="HOST:PORT", help="Host to serve the model"
+        "--host_port", type=str, default="HOST:PORT", help="Host and port for LoRA operations"
     )
     parser.add_argument(
         "--eager", action="store_true", help="Enable eager execution"
@@ -342,10 +347,10 @@ def get_args():
         "--chat_template",
         type=str,
         help="Path to the chat template file",
-    )  # Added argument
+    )
     parser.add_argument(
-        "--lora_modules",'-lm',
-        nargs="+",  # Accept multiple values
+        "--lora_modules", "-lm",
+        nargs="+",
         type=str,
         help="List of LoRA modules in the format lora_name lora_module",
     )
@@ -404,25 +409,39 @@ def main():
     """Main entry point for the script."""
 
     args = get_args()
-    # if help
-    if args.mode == "serve":
-        # if model is None and lora_modules is  not None then try to parse the model from lora_modules
-        # read the os.path.join(lora_modules[0], "adapter_config.json")
-        if args.model is None and args.lora_modules is not None:
-            lora_config = os.path.join(args.lora_modules[1], "adapter_config.json")
-            # get the base_model_name_or_path 
-            config = load_by_ext(lora_config)
-            model_name = config.get("base_model_name_or_path")
-            # if model ends with -bnb-4bit then remove it if not --bnb
-            if model_name.endswith("-unsloth-bnb-4bit") and not args.bnb:
-                # remove the tail
-                model_name = model_name.replace("-unsloth-bnb-4bit", "")
-            # or -bnb-4bit
-            elif model_name.endswith("-bnb-4bit") and not args.bnb:
-                model_name = model_name.replace("-bnb-4bit", "")
-            logger.info(f"Model name from LoRA config: {model_name}")
-            args.model = model_name
 
+    if args.mode == "serve":
+        # Handle LoRA model serving via the new --lora argument
+        if args.lora:
+            lora_name, lora_path = args.lora
+            if not args.lora_modules:
+                args.lora_modules = [lora_name, lora_path]
+            # Try to get the model from LoRA config if not specified
+            if args.model is None:
+                lora_config = os.path.join(lora_path, "adapter_config.json")
+                if os.path.exists(lora_config):
+                    config = load_by_ext(lora_config)
+                    model_name = config.get("base_model_name_or_path")
+                    # Handle different quantization suffixes
+                    if model_name.endswith("-unsloth-bnb-4bit") and not args.bnb:
+                        model_name = model_name.replace("-unsloth-bnb-4bit", "")
+                    elif model_name.endswith("-bnb-4bit") and not args.bnb:
+                        model_name = model_name.replace("-bnb-4bit", "")
+                    logger.info(f"Model name from LoRA config: {model_name}")
+                    args.model = model_name
+        
+        # Fall back to existing logic for other cases (already specified lora_modules)
+        if args.model is None and args.lora_modules is not None and not args.lora:
+            lora_config = os.path.join(args.lora_modules[1], "adapter_config.json")
+            if os.path.exists(lora_config):
+                config = load_by_ext(lora_config)
+                model_name = config.get("base_model_name_or_path")
+                if model_name.endswith("-unsloth-bnb-4bit") and not args.bnb:
+                    model_name = model_name.replace("-unsloth-bnb-4bit", "")
+                elif model_name.endswith("-bnb-4bit") and not args.bnb:
+                    model_name = model_name.replace("-bnb-4bit", "")
+                logger.info(f"Model name from LoRA config: {model_name}")
+                args.model = model_name
 
         serve(
             args.model,
@@ -436,16 +455,24 @@ def main():
             args.bnb,
             args.eager,
             args.chat_template,
-            args.lora_modules,  # Pass updated lora_modules
+            args.lora_modules,
         )
             
     elif args.mode == "kill":
         kill_existing_vllm(args.vllm_binary)
-    elif args.mode == "add_lora":
-        lora_name = args.model
-        add_lora(lora_name, host_port=args.host_port, served_model_name=args.served_model_name)
-    elif args.mode == "unload_lora":
-        lora_name = args.model
+    elif args.mode == "add-lora":
+        if args.lora:
+            lora_name, lora_path = args.lora
+            add_lora(lora_path, host_port=args.host_port, served_model_name=lora_name)
+        else:
+            # Fallback to old behavior
+            lora_name = args.model
+            add_lora(lora_name, host_port=args.host_port, served_model_name=args.served_model_name)
+    elif args.mode == "unload-lora":
+        if args.lora:
+            lora_name = args.lora[0]
+        else:
+            lora_name = args.model
         unload_lora(lora_name, host_port=args.host_port)
 
 if __name__ == "__main__":
