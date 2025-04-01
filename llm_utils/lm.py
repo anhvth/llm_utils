@@ -266,7 +266,7 @@ class OAI_LM(dspy.LM):
     ) -> str | BaseModel:
         if retry_count > self.kwargs.get("num_retries", 3):
             # raise ValueError("Retry limit exceeded")
-            logger.error(f"Retry limit exceeded, error: {error}")
+            logger.error(f"Retry limit exceeded, error: {error}, {self.base_url=}")
             raise error
         # have multiple ports, and port is not specified
 
