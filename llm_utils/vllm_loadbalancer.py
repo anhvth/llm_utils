@@ -285,12 +285,12 @@ async def print_status_periodically():
             current_counts = connection_counts.copy()
 
         if not current_available:
-             # clear terminal and print status
-             print("\033[H\033[J", end="")  # Clear terminal
-             print("\n----- Load Balancer Status -----")
-             print("No backend servers currently available (failed /health check).")
-             print("------------------------------\n")
-             continue
+            # clear terminal and print status
+            print("\033[H\033[J", end="")  # Clear terminal
+            print("\n----- Load Balancer Status -----")
+            print("No backend servers currently available (failed /health check).")
+            print("------------------------------\n")
+            continue
 
         for server in current_available:
             host, port = server
@@ -340,7 +340,7 @@ async def main():
                 pass
             logging.info("Background tasks finished.")
 
-if __name__ == "__main__":
+def run_load_balancer():
     # Make sure to install aiohttp: pip install aiohttp
     try:
         asyncio.run(main())
@@ -348,3 +348,6 @@ if __name__ == "__main__":
         logging.info("Shutdown requested by user.")
     except Exception as e:
          logging.critical(f"Critical error in main execution: {e}")
+
+if __name__ == "__main__":
+    run_load_balancer()

@@ -24,4 +24,4 @@ dependencies = [
 
 [project.scripts]
 svllm = "llm_utils.vllm_serve:main"
-svllm-lb = "llm_utils.vllm_loadbalancer:main"
+svllm-lb = "llm_utils.vllm_loadbalancer"
