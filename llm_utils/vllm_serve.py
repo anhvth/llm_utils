@@ -1,3 +1,15 @@
+""""
+USAGE:
+Serve loras with vLLM
+svllm serve -lm LOR_NAME LORA_PATH -g 0123
+
+# serve model
+svllm serve -m model_name -g 0123
+
+# add lora to served model
+svllm add_lora -m PAT_TO_LORA -served_model_name LORA_NAME -g 0123
+"""
+
 from glob import glob
 import os
 import subprocess
@@ -61,7 +73,8 @@ def add_lora(
     lora_name_or_path: str,
     url: str = "http://HOST:PORT/v1/load_lora_adapter",
     host_port: str = "localhost:8150",
-    served_model_name:str = None
+    served_model_name: str = None,
+    lora_module: Optional[str] = None,  # Added parameter
 ) -> dict:
     if os.path.exists(lora_name_or_path):
         assert served_model_name, "served_model_name is required when lora_name_or_path is a path"
@@ -101,7 +114,12 @@ def add_lora(
         pass
     headers = {"Content-Type": "application/json"}
     lora_name_or_path = served_model_name or lora_name_or_path
-    data = {"lora_name": lora_name_or_path, "lora_path": lora_path}
+    data = {
+        "lora_name": lora_name_or_path,
+        "lora_path": lora_path,
+    }
+    if lora_module:  # Include lora_module if provided
+        data["lora_module"] = lora_module
     logger.info(f"{data=}")
     # logger.warning(f"Failed to unload LoRA adapter: {str(e)}")
     try:
@@ -152,8 +170,8 @@ def serve(
     enable_lora: bool = False,
     is_bnb: bool = False,
     eager: bool = False,
-    chat_template: Optional[str] = None,  # Added parameter
-    lora_modules: Optional[str] = None,
+    chat_template: Optional[str] = None,
+    lora_modules: Optional[List[str]] = None,  # Updated type
 ):
     """Main function to start or kill vLLM containers."""
 
@@ -219,7 +237,18 @@ def serve(
             chat_template = get_chat_template(chat_template)
             cmd.extend(["--chat-template", chat_template])  # Add chat_template argument
         if lora_modules:
-            cmd.extend(["--lora-modules", lora_modules])
+            # for lora_module in lora_modules:
+                # len must be even and we will join tuple with `=`
+            assert len(lora_modules) % 2 == 0, "lora_modules must be even"
+            # lora_modulle = [f'{name}={module}' for name, module in zip(lora_module[::2], lora_module[1::2])]
+            # import ipdb;ipdb.set_trace()
+            s = ''
+            for i in range(0, len(lora_modules), 2):
+                name = lora_modules[i]
+                module = lora_modules[i + 1]
+                s += f"{name}={module} "
+            
+            cmd.extend(["--lora-modules", s])
         # add kwargs
         final_cmd = " ".join(cmd)
         log_file = f"/tmp/vllm_{port}.txt"
@@ -265,7 +294,7 @@ def get_args():
         "--served_model_name", type=str, help="Name of the served model"
     )
     parser.add_argument(
-        "--port_start", type=int, default=8155, help="Starting port number"
+        "--port_start", '-p',type=int, default=8155, help="Starting port number"
     )
     parser.add_argument(
         "--gpu_memory_utilization",
@@ -315,12 +344,13 @@ def get_args():
         help="Path to the chat template file",
     )  # Added argument
     parser.add_argument(
-        "--lora_modules",
+        "--lora_modules",'-lm',
+        nargs="+",  # Accept multiple values
         type=str,
-        help="Path to the LoRA modules file",
-    )  # Added argument
+        help="List of LoRA modules in the format lora_name lora_module",
+    )
     return parser.parse_args()
-from speedy_utils import jloads, memoize
+from speedy_utils import jloads, load_by_ext, memoize
 
 
 def fetch_chat_template(template_name: str = 'qwen') -> str:
@@ -376,6 +406,24 @@ def main():
     args = get_args()
     # if help
     if args.mode == "serve":
+        # if model is None and lora_modules is  not None then try to parse the model from lora_modules
+        # read the os.path.join(lora_modules[0], "adapter_config.json")
+        if args.model is None and args.lora_modules is not None:
+            lora_config = os.path.join(args.lora_modules[1], "adapter_config.json")
+            # get the base_model_name_or_path 
+            config = load_by_ext(lora_config)
+            model_name = config.get("base_model_name_or_path")
+            # if model ends with -bnb-4bit then remove it if not --bnb
+            if model_name.endswith("-unsloth-bnb-4bit") and not args.bnb:
+                # remove the tail
+                model_name = model_name.replace("-unsloth-bnb-4bit", "")
+            # or -bnb-4bit
+            elif model_name.endswith("-bnb-4bit") and not args.bnb:
+                model_name = model_name.replace("-bnb-4bit", "")
+            logger.info(f"Model name from LoRA config: {model_name}")
+            args.model = model_name
+
+
         serve(
             args.model,
             args.gpu_groups,
@@ -387,8 +435,8 @@ def main():
             args.enable_lora,
             args.bnb,
             args.eager,
-            args.chat_template,  # Pass chat_template argument
-            args.lora_modules,
+            args.chat_template,
+            args.lora_modules,  # Pass updated lora_modules
         )
             
     elif args.mode == "kill":
