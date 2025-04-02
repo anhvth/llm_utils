@@ -2,17 +2,16 @@ import fcntl
 import os
 import random
 import tempfile
-import threading
-import time
 from copy import deepcopy
 from typing import Any, List, Literal, Optional, TypedDict
 
 import dspy
 import litellm
-from loguru import logger
 import numpy as np
+from loguru import logger
 from pydantic import BaseModel
-from speedy_utils import dump_json_or_pickle, identify_uuid, load_json_or_pickle
+from speedy_utils import (dump_json_or_pickle, identify_uuid,
+                          load_json_or_pickle)
 
 
 class Message(TypedDict):
