@@ -78,47 +78,48 @@ def add_lora(
     served_model_name: str = None,
     lora_module: Optional[str] = None,  # Added parameter
 ) -> dict:
-    if os.path.exists(lora_name_or_path):
-        assert served_model_name, "served_model_name is required when lora_name_or_path is a path"
+    # if os.path.exists(lora_name_or_path):
+    #     assert served_model_name, "served_model_name is required when lora_name_or_path is a path"
         # should be located at LORA_DIR/{LORA_NAME}
-        lora_name_or_path = os.path.abspath(lora_name_or_path)
-        if not lora_name_or_path.startswith(LORA_DIR):
+        # lora_name_or_path = os.path.abspath(lora_name_or_path)
+        # if not lora_name_or_path.startswith(LORA_DIR):
             # copy to LORA_DIR
-            paths = glob(f"{lora_name_or_path}/*")
-            import shutil
-            target_dir = os.path.join(LORA_DIR, served_model_name)
+            # paths = glob(f"{lora_name_or_path}/*")
+            # import shutil
+            # target_dir = os.path.join(LORA_DIR, served_model_name)
             # if os.path.isdir(target_dir):
             #     shutil.rmtree(target_dir)
             # do not copy the
             #copy everything except folder
-            os.makedirs(target_dir, exist_ok=True)
-            for path in paths:
-                if os.path.isfile(path):
-                    try:
-                        print(f"Copying {path} to {target_dir}")
-                        shutil.copy(path, target_dir)
-                    except:
-                        pass
+            # os.makedirs(target_dir, exist_ok=True)
+            # for path in paths:
+            #     if os.path.isfile(path):
+            #         try:
+            #             print(f"Copying {path} to {target_dir}")
+            #             shutil.copy(path, target_dir)
+            #         except:
+            #             pass
             # shutil.copytree(lora_name_or_path, target_dir)
-    else:
-        served_model_name = lora_name_or_path.split(LORA_DIR)[1].strip("/")
+    # else:
+        # served_model_name = lora_name_or_path.split(LORA_DIR)[1].strip("/")
         
-    logger.info(f'LOra name: {lora_name_or_path}')
+    # logger.info(f'LOra name: {lora_name_or_path}')
     url = url.replace("HOST:PORT", host_port)
-    if not lora_name_or_path.startswith(LORA_DIR):
-        lora_path = os.path.join(LORA_DIR, served_model_name)
-    else:
-        lora_path = lora_name_or_path
-    logger.info(f'{url=}')
-    try:
-        unload_lora(lora_name_or_path, host_port=host_port)
-    except Exception as e:
-        pass
+    # if not lora_name_or_path.startswith(LORA_DIR):
+    #     lora_path = os.path.join(LORA_DIR, served_model_name)
+    # else:
+    #     lora_path = lora_name_or_path
+    # logger.info(f'{url=}')
+    # try:
+    #     unload_lora(lora_name_or_path, host_port=host_port)
+    # except Exception as e:
+    #     pass
     headers = {"Content-Type": "application/json"}
-    lora_name_or_path = served_model_name or lora_name_or_path
+    # lora_name_or_path = served_model_name or lora_name_or_path
+    # import ipdb; ipdb.set_trace()  
     data = {
-        "lora_name": lora_name_or_path,
-        "lora_path": lora_path,
+        "lora_name": served_model_name,
+        "lora_path": os.path.abspath(lora_name_or_path),
     }
     if lora_module:  # Include lora_module if provided
         data["lora_module"] = lora_module
