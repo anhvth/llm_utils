@@ -1,7 +1,7 @@
 from .chat_format import *
 from .lm import OAI_LM
 from .text_utils import *
-
+from .group_messages import *
 __all__ = [
     "split_indices_by_length",
     "group_messages_by_len",
