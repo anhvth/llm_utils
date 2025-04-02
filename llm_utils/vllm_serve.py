@@ -288,7 +288,7 @@ def get_args():
         description="vLLM Serve Script", epilog="Example: " + " || ".join(example_args)
     )
     parser.add_argument(
-        "mode", choices=["serve", "kill", "add-lora", "unload-lora"], help="Mode to run the script in"
+        "mode", choices=["serve", "kill", "add_lora", "unload_lora"], help="Mode to run the script in"
     )
     parser.add_argument("--model", "-m", type=str, help="Model to serve")
     parser.add_argument(
@@ -461,7 +461,7 @@ def main():
             
     elif args.mode == "kill":
         kill_existing_vllm(args.vllm_binary)
-    elif args.mode == "add-lora":
+    elif args.mode == "add_lora":
         if args.lora:
             lora_name, lora_path = args.lora
             add_lora(lora_path, host_port=args.host_port, served_model_name=lora_name)
