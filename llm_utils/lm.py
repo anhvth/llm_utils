@@ -44,7 +44,7 @@ class ChatSession:
         return len(self.history)
 
     def __call__(
-        self, text, response_format=None, display=True, max_prev_turns=3,**kwargs
+        self, text, response_format=None, display=True, max_prev_turns=3, **kwargs
     ) -> str | BaseModel:
         response_format = response_format or self.response_format
         self.history.append({"role": "user", "content": text})
@@ -205,7 +205,7 @@ class OAI_LM(dspy.LM):
         provider=None,
         finetuning_model: Optional[str] = None,
         launch_kwargs: Optional[dict[str, Any]] = None,
-        host='localhost',
+        host="localhost",
         port=None,
         ports=None,
         api_key=None,
@@ -219,8 +219,6 @@ class OAI_LM(dspy.LM):
 
         if port is not None:
             kwargs["base_url"] = f"http://{host}:{port}/v1"
-            # if not os.environ.get("OPENAI_API_KEY"):
-            #     os.environ["OPENAI_API_KEY"] = "abc"
             self.base_url = kwargs["base_url"]
 
         if model is None:
@@ -230,26 +228,47 @@ class OAI_LM(dspy.LM):
 
         if not model.startswith("openai/"):
             model = f"openai/{model}"
+        try:
+            super().__init__(
+                model=model,
+                model_type=model_type,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                cache=False,  # disable cache handling by default and implement custom cache handling
+                callbacks=callbacks,
+                num_retries=num_retries,
+                provider=provider,
+                finetuning_model=finetuning_model,
+                launch_kwargs=launch_kwargs,
+                api_key=api_key or os.getenv("OPENAI_API_KEY", "abc"),
+                **kwargs,
+            )
+        except Exception as e:
+            is_error = "LLM Provider NOT provided" in str(e)
+            if is_error:
+                # try adding openai/ prefix
+                return OAI_LM(
+                    model=f"openai/{model}",
+                    model_type=model_type,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    cache=cache,
+                    callbacks=callbacks,
+                    num_retries=num_retries,
+                    provider=provider,
+                    finetuning_model=finetuning_model,
+                    launch_kwargs=launch_kwargs,
+                    host=host,
+                    port=port,
+                    api_key=api_key or os.getenv("OPENAI_API_KEY", "abc"),
+                    **kwargs,
+                )
 
-        super().__init__(
-            model=model,
-            model_type=model_type,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            cache=False,  # disable cache handling by default and implement custom cache handling
-            callbacks=callbacks,
-            num_retries=num_retries,
-            provider=provider,
-            finetuning_model=finetuning_model,
-            launch_kwargs=launch_kwargs,
-            api_key=api_key or os.getenv("OPENAI_API_KEY", "abc"),
-            **kwargs,
-        )
         self.do_cache = cache
 
     @property
     def last_message(self):
-        return self.history[-1]['response'].model_dump()['choices'][0]['message']
+        return self.history[-1]["response"].model_dump()["choices"][0]["message"]
 
     def __call__(
         self,
@@ -304,7 +323,9 @@ class OAI_LM(dspy.LM):
                 kwargs["base_url"] = f"http://{self.host}:{port}/v1"
             try:
                 if must_load_cache:
-                    raise ValueError("Expected to load from cache but got None, maybe previous call failed so it didn't save to cache")
+                    raise ValueError(
+                        "Expected to load from cache but got None, maybe previous call failed so it didn't save to cache"
+                    )
                 result = super().__call__(
                     prompt=prompt,
                     messages=messages,
@@ -337,6 +358,7 @@ class OAI_LM(dspy.LM):
             self.dump_cache(id, result)
         if response_format:
             import json_repair
+
             try:
                 return response_format(**json_repair.loads(result))
             except Exception as e:
@@ -418,6 +440,7 @@ class OAI_LM(dspy.LM):
         return openai.OpenAI(
             base_url=self.kwargs["base_url"], api_key=os.getenv("OPENAI_API_KEY", "abc")
         )
+
     @classmethod
     def get_deepseek_chat(self, api_key=None, max_tokens=2000, **kwargs):
         return OAI_LM(
@@ -426,7 +449,8 @@ class OAI_LM(dspy.LM):
             api_key=api_key or os.environ["DEEPSEEK_API_KEY"],
             max_tokens=max_tokens,
             **kwargs,
-            )
+        )
+
     @classmethod
     def get_deepseek_reasoner(self, api_key=None, max_tokens=2000, **kwargs):
         return OAI_LM(
@@ -436,4 +460,3 @@ class OAI_LM(dspy.LM):
             max_tokens=max_tokens,
             **kwargs,
         )
-    
