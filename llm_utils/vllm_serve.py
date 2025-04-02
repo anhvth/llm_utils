@@ -280,7 +280,7 @@ def get_args():
     example_args = [
         "svllm serve --model MODEL_NAME --gpus 0,1,2,3",
         "svllm serve --lora LORA_NAME LORA_PATH --gpus 0,1,2,3",
-        "svllm add-lora --lora LORA_NAME LORA_PATH --host_port localhost:8150",
+        "svllm add_lora --lora LORA_NAME LORA_PATH --host_port localhost:8150",
         "svllm kill",
     ]
 
