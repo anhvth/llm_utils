@@ -1,21 +1,16 @@
-import functools
-import logging
+import fcntl
 import os
+import random
+import tempfile
 import threading
-import uuid
+import time
 from copy import deepcopy
-from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional, TypedDict
+from typing import Any, List, Literal, Optional, TypedDict
 
 import dspy
 import litellm
-import ujson
-from dspy import adapters
-from dspy.adapters.base import Adapter
-from dspy.clients.openai import OpenAIProvider
-from dspy.clients.provider import Provider, TrainingJob
-from dspy.utils.callback import BaseCallback, with_callbacks
 from loguru import logger
+import numpy as np
 from pydantic import BaseModel
 from speedy_utils import dump_json_or_pickle, identify_uuid, load_json_or_pickle
 
@@ -49,7 +44,7 @@ class ChatSession:
         return len(self.history)
 
     def __call__(
-        self, text, response_format=None, display=True, max_prev_turns=3, **kwargs
+        self, text, response_format=None, display=True, max_prev_turns=3,**kwargs
     ) -> str | BaseModel:
         response_format = response_format or self.response_format
         self.history.append({"role": "user", "content": text})
@@ -98,6 +93,101 @@ class ChatSession:
             pass
 
 
+def _clear_port_use(ports):
+    """
+    Clear the usage counters for all ports.
+    """
+    for port in ports:
+        file_counter = f"/tmp/port_use_counter_{port}.npy"
+        if os.path.exists(file_counter):
+            os.remove(file_counter)
+
+
+def _atomic_save(array: np.ndarray, filename: str):
+    """
+    Write `array` to `filename` with an atomic rename to avoid partial writes.
+    """
+    # The temp file must be on the same filesystem as `filename` to ensure
+    # that os.replace() is truly atomic.
+    tmp_dir = os.path.dirname(filename) or "."
+    with tempfile.NamedTemporaryFile(dir=tmp_dir, delete=False) as tmp:
+        np.save(tmp, array)
+        temp_name = tmp.name
+
+    # Atomically rename the temp file to the final name.
+    # On POSIX systems, os.replace is an atomic operation.
+    os.replace(temp_name, filename)
+
+
+def _update_port_use(port: int, increment: int):
+    """
+    Update the usage counter for a given port, safely with an exclusive lock
+    and atomic writes to avoid file corruption.
+    """
+    file_counter = f"/tmp/port_use_counter_{port}.npy"
+    file_counter_lock = f"/tmp/port_use_counter_{port}.lock"
+
+    with open(file_counter_lock, "w") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        try:
+            # If file exists, load it. Otherwise assume zero usage.
+            if os.path.exists(file_counter):
+                try:
+                    counter = np.load(file_counter)
+                except Exception as e:
+                    # If we fail to load (e.g. file corrupted), start from zero
+                    logger.warning(f"Corrupted usage file {file_counter}: {e}")
+                    counter = np.array([0])
+            else:
+                counter = np.array([0])
+
+            # Increment usage and atomically overwrite the old file
+            counter[0] += increment
+            _atomic_save(counter, file_counter)
+
+        finally:
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
+
+
+def _pick_least_used_port(ports: List[int]) -> int:
+    """
+    Pick the least-used port among the provided list, safely under a global lock
+    so that no two processes pick a port at the same time.
+    """
+    global_lock_file = "/tmp/ports.lock"
+
+    with open(global_lock_file, "w") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        try:
+            port_use = {}
+            # Read usage for each port
+            for port in ports:
+                file_counter = f"/tmp/port_use_counter_{port}.npy"
+                if os.path.exists(file_counter):
+                    try:
+                        counter = np.load(file_counter)
+                    except Exception as e:
+                        # If the file is corrupted, reset usage to 0
+                        logger.warning(f"Corrupted usage file {file_counter}: {e}")
+                        counter = np.array([0])
+                else:
+                    counter = np.array([0])
+                port_use[port] = counter[0]
+
+            logger.debug(f"Port use: {port_use}")
+
+            # Pick the least-used port
+            lsp = min(port_use, key=port_use.get)
+
+            # Increment usage of that port
+            _update_port_use(lsp, 1)
+
+        finally:
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
+
+    return lsp
+
+
 class OAI_LM(dspy.LM):
     """
     A language model supporting chat or text completion requests for use with DSPy modules.
@@ -115,12 +205,31 @@ class OAI_LM(dspy.LM):
         provider=None,
         finetuning_model: Optional[str] = None,
         launch_kwargs: Optional[dict[str, Any]] = None,
+        host='localhost',
+        port=None,
+        ports=None,
+        api_key=None,
         **kwargs,
     ):
+
+        self.ports = ports
+        self.host = host
+        if ports is not None:
+            port = ports[0]
+
+        if port is not None:
+            kwargs["base_url"] = f"http://{host}:{port}/v1"
+            # if not os.environ.get("OPENAI_API_KEY"):
+            #     os.environ["OPENAI_API_KEY"] = "abc"
+            self.base_url = kwargs["base_url"]
+
         if model is None:
             model = self.list_models(kwargs.get("base_url"))[0]
             model = f"openai/{model}"
             logger.info(f"Using default model: {model}")
+
+        if not model.startswith("openai/"):
+            model = f"openai/{model}"
 
         super().__init__(
             model=model,
@@ -133,9 +242,14 @@ class OAI_LM(dspy.LM):
             provider=provider,
             finetuning_model=finetuning_model,
             launch_kwargs=launch_kwargs,
+            api_key=api_key or os.getenv("OPENAI_API_KEY", "abc"),
             **kwargs,
         )
         self.do_cache = cache
+
+    @property
+    def last_message(self):
+        return self.history[-1]['response'].model_dump()['choices'][0]['message']
 
     def __call__(
         self,
@@ -143,8 +257,19 @@ class OAI_LM(dspy.LM):
         messages=None,
         response_format: BaseModel = None,
         cache=None,
+        retry_count=0,
+        port=None,
+        error=None,
+        use_loadbalance=None,
+        must_load_cache=False,
         **kwargs,
     ) -> str | BaseModel:
+        if retry_count > self.kwargs.get("num_retries", 3):
+            # raise ValueError("Retry limit exceeded")
+            logger.error(f"Retry limit exceeded, error: {error}, {self.base_url=}")
+            raise error
+        # have multiple ports, and port is not specified
+
         id = None
         cache = cache if cache is not None else self.do_cache
         if response_format:
@@ -153,7 +278,6 @@ class OAI_LM(dspy.LM):
             ), f"response_format must be a pydantic model, {type(response_format)} provided"
         result = None
         if cache:
-            # max_tokens = kwargs.get("max_tokens", self.max_tokens)
             _kwargs = {**self.kwargs, **kwargs}
 
             s = str(
@@ -169,21 +293,45 @@ class OAI_LM(dspy.LM):
             id = identify_uuid(s)
             result = self.load_cache(id)
         if not result:
+            if self.ports and not port:
+                if use_loadbalance:
+
+                    port = self.get_least_used_port()
+                else:
+                    port = random.choice(self.ports)
+
+            if port:
+                kwargs["base_url"] = f"http://{self.host}:{port}/v1"
             try:
+                if must_load_cache:
+                    raise ValueError("Expected to load from cache but got None, maybe previous call failed so it didn't save to cache")
                 result = super().__call__(
                     prompt=prompt,
                     messages=messages,
                     **kwargs,
                     response_format=response_format,
                 )
-                if kwargs.get('n', 1) == 1:
+                if kwargs.get("n", 1) == 1:
                     result = result[0]
             except litellm.exceptions.ContextWindowExceededError as e:
                 logger.error(f"Context window exceeded: {e}")
-                # raise e
+            except litellm.exceptions.APIError as e:
+                return self.__call__(
+                    prompt=prompt,
+                    messages=messages,
+                    response_format=response_format,
+                    cache=cache,
+                    retry_count=retry_count + 1,
+                    port=port,
+                    error=e,
+                    **kwargs,
+                )
             except Exception as e:
                 logger.error(f"Error: {e}")
-                # raise e
+                raise
+            finally:
+                if port and use_loadbalance:
+                    _update_port_use(port, -1)
 
         if self.do_cache:
             self.dump_cache(id, result)
@@ -192,8 +340,25 @@ class OAI_LM(dspy.LM):
             try:
                 return response_format(**json_repair.loads(result))
             except Exception as e:
-                raise ValueError(f"Failed to parse response for {response_format}: {e}")
+                # try again
+                return self.__call__(
+                    prompt=prompt,
+                    messages=messages,
+                    response_format=response_format,
+                    cache=cache,
+                    retry_count=retry_count + 1,
+                    error=e,
+                    **kwargs,
+                )
         return result
+
+    def clear_port_use(self):
+        _clear_port_use(self.ports)
+
+    def get_least_used_port(self):
+        least_used_port = _pick_least_used_port(self.ports)
+        port = least_used_port
+        return port
 
     def get_session(
         self,
@@ -236,15 +401,39 @@ class OAI_LM(dspy.LM):
             logger.warning(f"Cache load failed: {e}")
             return None
 
-    def list_models(self, base_url):
+    def list_models(self, base_url=None):
         import openai
 
         base_url = base_url or self.kwargs["base_url"]
-        client = openai.OpenAI(base_url=base_url)
+        client = openai.OpenAI(
+            base_url=base_url, api_key=os.getenv("OPENAI_API_KEY", "abc")
+        )
         page = client.models.list()
         return [d.id for d in page.data]
-    
+
     @property
     def client(self):
         import openai
-        return openai.OpenAI(base_url=self.kwargs["base_url"])
+
+        return openai.OpenAI(
+            base_url=self.kwargs["base_url"], api_key=os.getenv("OPENAI_API_KEY", "abc")
+        )
+    @classmethod
+    def get_deepseek_chat(self, api_key=None, max_tokens=2000, **kwargs):
+        return OAI_LM(
+            base_url="https://api.deepseek.com/v1",
+            model="deepseek-chat",
+            api_key=api_key or os.environ["DEEPSEEK_API_KEY"],
+            max_tokens=max_tokens,
+            **kwargs,
+            )
+    @classmethod
+    def get_deepseek_reasoner(self, api_key=None, max_tokens=2000, **kwargs):
+        return OAI_LM(
+            base_url="https://api.deepseek.com/v1",
+            model="deepseek-reasoner",
+            api_key=api_key or os.environ["DEEPSEEK_API_KEY"],
+            max_tokens=max_tokens,
+            **kwargs,
+        )
+    
