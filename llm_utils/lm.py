@@ -210,7 +210,9 @@ class OAI_LM(dspy.LM):
         api_key=None,
         **kwargs,
     ):
-
+        import openai
+        version = openai.__version__  # str value "1.70.0"
+        assert version >= "1.70.0", f"OpenAI version must be >= 1.70.0, got {version}"
         self.ports = ports
         self.host = host
         if ports is not None:
