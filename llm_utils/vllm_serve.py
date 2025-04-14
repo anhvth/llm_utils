@@ -431,6 +431,9 @@ def main():
                         model_name = model_name.replace("-bnb-4bit", "")
                     logger.info(f"Model name from LoRA config: {model_name}")
                     args.model = model_name
+            assert args.model, (
+                "Model name must be specified when using LoRA."
+            )
         
         # Fall back to existing logic for other cases (already specified lora_modules)
         if args.model is None and args.lora_modules is not None and not args.lora:

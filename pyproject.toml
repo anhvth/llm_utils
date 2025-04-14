@@ -25,3 +25,4 @@ dependencies = [
 [project.scripts]
 svllm = "llm_utils.vllm_serve:main"
 svllm-lb = "llm_utils.vllm_load_balancer:run_load_balancer"
+svllm-offline = "llm_utils.vllm_offline:main"
