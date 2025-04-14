@@ -22,10 +22,10 @@ from loguru import logger
 import argparse
 import requests
 
-
 LORA_DIR = os.environ.get("LORA_DIR", "/loras")
 LORA_DIR = os.path.abspath(LORA_DIR)
 HF_HOME = os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
+CURRENT_DIR = "$(pwd)"
 logger.info(f"LORA_DIR: {LORA_DIR}")
 
 def kill_existing_vllm(vllm_binary: Optional[str] = None) -> None:
@@ -290,7 +290,7 @@ def get_args():
     parser.add_argument(
         "mode", choices=["serve", "kill", "add_lora", "unload_lora"], help="Mode to run the script in"
     )
-    parser.add_argument("--model", "-m", type=str, help="Model to serve")
+    parser.add_argument("--model", "-m", type=str, help="Model to serve", default=os.path.abspath('./'))
     parser.add_argument(
         "--gpus", "-g", type=str, help="Comma-separated list of GPU groups", dest="gpu_groups"
     )
@@ -355,7 +355,8 @@ def get_args():
         type=str,
         help="List of LoRA modules in the format lora_name lora_module",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    return args
 from speedy_utils import jloads, load_by_ext, memoize
 
 
