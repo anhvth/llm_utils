@@ -1,4 +1,4 @@
-""""
+HELP = """"
 USAGE:
 Serve models and LoRAs with vLLM:
 
@@ -276,17 +276,10 @@ def get_vllm():
 
 
 def get_args():
-    """Parse command line arguments."""
-    example_args = [
-        "svllm serve --model MODEL_NAME --gpus 0,1,2,3",
-        "svllm serve --lora LORA_NAME LORA_PATH --gpus 0,1,2,3",
-        "svllm add_lora --lora LORA_NAME LORA_PATH --host_port localhost:8150",
-        "svllm kill",
-    ]
+
 
     parser = argparse.ArgumentParser(
-        description="vLLM Serve Script", epilog="Example: " + " || ".join(example_args)
-    )
+        description="vLLM Serve Script", epilog=HELP, formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument(
         "mode", choices=["serve", "kill", "add_lora", "unload_lora"], help="Mode to run the script in"
     )
