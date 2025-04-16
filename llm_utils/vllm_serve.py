@@ -20,8 +20,6 @@ svllm unload_lora --lora LORA_NAME --host_port host:port
 List models served on a specific host:port:
 svllm list_models --host_port host:port
 
-Kill running vLLM processes:
-svllm kill
 """
 
 from glob import glob
@@ -76,113 +74,6 @@ def model_list(host_port, api_key='abc'):
     except Exception as e:
         logger.error(f"An error occurred while listing models: {e}")
 
-
-def kill_existing_vllm(vllm_binary: Optional[str] = None) -> None:
-    """Kill selected vLLM processes using pyfzf.""" # Updated docstring
-    if not vllm_binary:
-        try:
-            vllm_binary = get_vllm()
-        except FileNotFoundError as e:
-             logger.error(e)
-             return # Exit if vllm binary isn't found
-
-    # List running vLLM processes
-    try:
-        # Using pgrep for potentially cleaner process finding
-        result = subprocess.run(
-            f"pgrep -af '{vllm_binary} serve'", # Find processes matching the command
-            shell=True,
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        # pgrep output format: PID command_line
-        # Get full lines using ps for better display in fzf
-        pids = [line.split()[0] for line in result.stdout.strip().split("\n") if line]
-        if not pids:
-             print("No running vLLM 'serve' processes found.")
-             return
-
-        ps_result = subprocess.run(
-            f"ps -o pid,user,cmd -p {','.join(pids)} --no-headers",
-            shell=True,
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        processes = [line.strip() for line in ps_result.stdout.strip().split("\n") if line]
-
-    except subprocess.CalledProcessError:
-        print("No running vLLM 'serve' processes found or error listing processes.")
-        return
-    except Exception as e:
-        logger.error(f"Error finding vLLM processes: {e}")
-        return
-
-
-    if not processes:
-        print("No running vLLM 'serve' processes found.")
-        return
-
-    # Use pyfzf to select processes to kill
-    try:
-        fzf = FzfPrompt()
-        # Prompt returns a list of selected lines
-        selected_processes = fzf.prompt(processes, "--multi --header='Select vLLM processes to kill (use TAB to multi-select)'")
-    except Exception as e:
-        logger.error(f"Failed to run fzf: {e}. Is fzf installed and in PATH?")
-        return
-
-
-    if not selected_processes: # Check if the list is empty
-        print("No processes selected.")
-        return
-
-    # Extract PIDs and kill selected processes
-    pids_to_kill = []
-    for line in selected_processes: # Iterate through the list
-        try:
-            # PID is the first element after stripping leading whitespace
-            pid = line.strip().split()[0]
-            if pid.isdigit():
-                 pids_to_kill.append(pid)
-            else:
-                 logger.warning(f"Could not parse PID from selected line: {line}")
-        except IndexError:
-            logger.warning(f"Could not parse PID from selected line (IndexError): {line}")
-            continue # Skip lines where PID cannot be extracted
-
-    if not pids_to_kill:
-        print("No valid PIDs selected.")
-        return
-
-    killed_pids = []
-    failed_pids = []
-    for pid in pids_to_kill:
-        try:
-            # Use SIGTERM first for graceful shutdown, then SIGKILL if necessary
-            # For simplicity here, using SIGKILL directly as in the original code
-            logger.info(f"Attempting to kill process {pid}...")
-            subprocess.run(
-                f"kill -9 {pid}",
-                shell=True,
-                check=True, # Raise exception on failure
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            killed_pids.append(pid)
-            logger.success(f"Successfully killed process {pid}.")
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to kill process {pid}: {e}")
-            failed_pids.append(pid)
-        except Exception as e:
-             logger.error(f"An unexpected error occurred while trying to kill process {pid}: {e}")
-             failed_pids.append(pid)
-
-    if killed_pids:
-        print(f"Killed processes: {', '.join(killed_pids)}")
-    if failed_pids:
-        print(f"Failed to kill processes: {', '.join(failed_pids)}")
 
 
 def add_lora(
@@ -558,7 +449,7 @@ def serve(
 def get_args():
     """Parse command line arguments using argparse."""
     parser = argparse.ArgumentParser(
-        description="Manage vLLM Server Instances (Serve, Kill, Add/Unload LoRA, List Models)",
+        description="Manage vLLM Server Instances (Serve, Add/Unload LoRA, List Models)",
         formatter_class=argparse.RawTextHelpFormatter, # Preserve formatting in help
         epilog="""\
 Examples:
@@ -584,8 +475,6 @@ Examples:
   # List models/adapters available on the server at localhost:8000
   svllm list_models --host_port localhost:8000
 
-  # Kill running vLLM 'serve' processes interactively
-  svllm kill
 """
     )
 
@@ -611,10 +500,6 @@ Examples:
     parser_serve.add_argument("--lora_modules", "-lm", nargs="+", type=str, help="Preload LoRA modules at startup. Format: name1 path1 [name2 path2 ...]. Requires --enable-lora.")
     parser_serve.add_argument("--pipeline_parallel", "-pp", default=1, type=int, help="Number of pipeline parallel stages")
     # parser_serve.add_argument("--extra_args", nargs=argparse.REMAINDER, help="Additional arguments to pass directly to vllm serve") # Example for future
-
-    # --- Kill Mode ---
-    parser_kill = subparsers.add_parser("kill", help="Interactively kill running vLLM server processes")
-    parser_kill.add_argument("--vllm_binary", type=str, help="Optional: Path to the specific vLLM binary if not in PATH")
 
     # --- Add LoRA Mode ---
     parser_add_lora = subparsers.add_parser("add_lora", help="Add a LoRA adapter to a running server")
@@ -748,9 +633,6 @@ def main():
             pipeline_parallel=args.pipeline_parallel,
         )
 
-    elif args.mode == "kill":
-        # --- Kill Logic ---
-        kill_existing_vllm(args.vllm_binary)
 
     elif args.mode == "add_lora":
         # --- Add LoRA Logic ---
