@@ -10,8 +10,7 @@ import litellm
 import numpy as np
 from loguru import logger
 from pydantic import BaseModel
-from speedy_utils import (dump_json_or_pickle, identify_uuid,
-                          load_json_or_pickle)
+from speedy_utils import dump_json_or_pickle, identify_uuid, load_json_or_pickle
 
 
 class Message(TypedDict):
@@ -211,6 +210,7 @@ class OAI_LM(dspy.LM):
         **kwargs,
     ):
         import openai
+
         version = openai.__version__  # str value "1.70.0"
         assert version >= "1.70.0", f"OpenAI version must be >= 1.70.0, got {version}"
         self.ports = ports
@@ -282,6 +282,7 @@ class OAI_LM(dspy.LM):
         error=None,
         use_loadbalance=None,
         must_load_cache=False,
+        max_tokens=None,
         **kwargs,
     ) -> str | BaseModel:
         if retry_count > self.kwargs.get("num_retries", 3):
@@ -291,7 +292,9 @@ class OAI_LM(dspy.LM):
         # have multiple ports, and port is not specified
 
         id = None
-        cache = cache if cache is not None else self.do_cache
+        cache = cache or self.do_cache
+        if max_tokens is not None:
+            kwargs["max_tokens"] = max_tokens
         if response_format:
             assert issubclass(
                 response_format, BaseModel
