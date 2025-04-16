@@ -75,14 +75,9 @@ def add_lora(
     lora_name_or_path: str,
     host_port: str, # Made host_port required and positional for clarity
     served_model_name: str,
-    url: str = "http://{host_port}/v1/lora_adapters/load", # Updated URL structure? Check vLLM docs
-    lora_module: Optional[str] = None, # Parameter retained but check vLLM endpoint
+    url: str = "http://{host_port}/v1/load_lora_adapter", # Updated URL structure? Check vLLM docs
 ) -> dict:
     """Adds a LoRA adapter to a running vLLM server."""
-    # Note: vLLM API might change. Verify the /v1/load_lora_adapter endpoint
-    # or if it's moved to /v1/lora_adapters/load or similar.
-    # The structure below assumes a JSON body like the original, adjust if needed.
-
     url = url.format(host_port=host_port) # Use format for clarity
     headers = {"Content-Type": "application/json"}
 
@@ -93,11 +88,8 @@ def add_lora(
 
     # Construct the payload based on typical vLLM API (verify this)
     data = {
-        "lora_request": {
              "lora_name": served_model_name, # The name to refer to this LoRA by
-             "lora_local_path": lora_absolute_path # Path on the server machine
-        }
-        # Potentially add other parameters like lora_int_id if needed by the API
+             "lora_path": lora_absolute_path # Path on the server machine
     }
 
     # Include lora_module if provided and supported by the endpoint
@@ -151,7 +143,7 @@ def unload_lora(lora_name: str, host_port: str):
     """Unloads a LoRA adapter from a running vLLM server."""
     # Note: Verify the correct endpoint URL and payload structure with vLLM documentation.
     # Assuming an endpoint like /v1/lora_adapters/unload
-    url = f"http://{host_port}/v1/lora_adapters/unload"
+    url = f"http://{host_port}/v1/unload_lora_adapter"
     headers = {"Content-Type": "application/json"}
     data = {
          "lora_request": {
