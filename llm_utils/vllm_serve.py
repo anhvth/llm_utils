@@ -1,4 +1,6 @@
-HELP = """"
+
+
+""""
 USAGE:
 Serve models and LoRAs with vLLM:
 
@@ -21,12 +23,20 @@ from fastcore.script import call_parse
 from loguru import logger
 import argparse
 import requests
+import openai
+
 
 LORA_DIR = os.environ.get("LORA_DIR", "/loras")
 LORA_DIR = os.path.abspath(LORA_DIR)
 HF_HOME = os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
-CURRENT_DIR = "$(pwd)"
 logger.info(f"LORA_DIR: {LORA_DIR}")
+
+
+def model_list(host_port, api_key='abc'):
+    client = openai.OpenAI(base_url=f"http://{host_port}", api_key=api_key)
+    models = client.Model.list()
+    print(f'Models: {models}')
+    return models
 
 def kill_existing_vllm(vllm_binary: Optional[str] = None) -> None:
     """Kill selected vLLM processes using fzf."""
@@ -78,52 +88,16 @@ def add_lora(
     served_model_name: str = None,
     lora_module: Optional[str] = None,  # Added parameter
 ) -> dict:
-    # if os.path.exists(lora_name_or_path):
-    #     assert served_model_name, "served_model_name is required when lora_name_or_path is a path"
-        # should be located at LORA_DIR/{LORA_NAME}
-        # lora_name_or_path = os.path.abspath(lora_name_or_path)
-        # if not lora_name_or_path.startswith(LORA_DIR):
-            # copy to LORA_DIR
-            # paths = glob(f"{lora_name_or_path}/*")
-            # import shutil
-            # target_dir = os.path.join(LORA_DIR, served_model_name)
-            # if os.path.isdir(target_dir):
-            #     shutil.rmtree(target_dir)
-            # do not copy the
-            #copy everything except folder
-            # os.makedirs(target_dir, exist_ok=True)
-            # for path in paths:
-            #     if os.path.isfile(path):
-            #         try:
-            #             print(f"Copying {path} to {target_dir}")
-            #             shutil.copy(path, target_dir)
-            #         except:
-            #             pass
-            # shutil.copytree(lora_name_or_path, target_dir)
-    # else:
-        # served_model_name = lora_name_or_path.split(LORA_DIR)[1].strip("/")
-        
-    # logger.info(f'LOra name: {lora_name_or_path}')
     url = url.replace("HOST:PORT", host_port)
-    # if not lora_name_or_path.startswith(LORA_DIR):
-    #     lora_path = os.path.join(LORA_DIR, served_model_name)
-    # else:
-    #     lora_path = lora_name_or_path
-    # logger.info(f'{url=}')
-    # try:
-    #     unload_lora(lora_name_or_path, host_port=host_port)
-    # except Exception as e:
-    #     pass
     headers = {"Content-Type": "application/json"}
-    # lora_name_or_path = served_model_name or lora_name_or_path
-    # import ipdb; ipdb.set_trace()  
+
     data = {
         "lora_name": served_model_name,
         "lora_path": os.path.abspath(lora_name_or_path),
     }
     if lora_module:  # Include lora_module if provided
         data["lora_module"] = lora_module
-    logger.info(f"{data=}")
+    logger.info(f"{data=}, {headers}, {url=}")
     # logger.warning(f"Failed to unload LoRA adapter: {str(e)}")
     try:
         response = requests.post(url, headers=headers, json=data)
@@ -276,14 +250,21 @@ def get_vllm():
 
 
 def get_args():
-
+    """Parse command line arguments."""
+    example_args = [
+        "svllm serve --model MODEL_NAME --gpus 0,1,2,3",
+        "svllm serve --lora LORA_NAME LORA_PATH --gpus 0,1,2,3",
+        "svllm add_lora --lora LORA_NAME LORA_PATH --host_port localhost:8150",
+        "svllm kill",
+    ]
 
     parser = argparse.ArgumentParser(
-        description="vLLM Serve Script", epilog=HELP, formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument(
-        "mode", choices=["serve", "kill", "add_lora", "unload_lora"], help="Mode to run the script in"
+        description="vLLM Serve Script", epilog="Example: " + " || ".join(example_args)
     )
-    parser.add_argument("--model", "-m", type=str, help="Model to serve", default=os.path.abspath('./'))
+    parser.add_argument(
+        "mode", choices=["serve", "kill", "add_lora", "unload_lora", "list_models"], help="Mode to run the script in"
+    )
+    parser.add_argument("--model", "-m", type=str, help="Model to serve")
     parser.add_argument(
         "--gpus", "-g", type=str, help="Comma-separated list of GPU groups", dest="gpu_groups"
     )
@@ -294,18 +275,19 @@ def get_args():
     parser.add_argument(
         "--served_model_name", type=str, help="Name of the served model"
     )
-    parser.add_argument(
-        "--port_start", '-p', type=int, default=8155, help="Starting port number"
-    )
+    # parser.add_argument(
+    #     "--port_start", '-p', type=int, default=8155, help="Starting port number"
+    # )
     parser.add_argument(
         "--gpu_memory_utilization",
+        '-gmu',
         type=float,
         default=0.9,
         help="GPU memory utilization",
     )
     parser.add_argument("--dtype", type=str, default="auto", help="Data type")
     parser.add_argument(
-        "--max_model_len", type=int, default=8192, help="Maximum model length"
+        "--max_model_len", '-mml',type=int, default=8192, help="Maximum model length"
     )
     parser.add_argument(
         "--disable_lora",
@@ -326,13 +308,13 @@ def get_args():
         type=int,
         help="Number of pipeline parallel stages",
     )
+    # parser.add_argument(
+    #     "--extra_args",
+    #     nargs=argparse.REMAINDER,
+    #     help="Additional arguments for the serve command",
+    # )
     parser.add_argument(
-        "--extra_args",
-        nargs=argparse.REMAINDER,
-        help="Additional arguments for the serve command",
-    )
-    parser.add_argument(
-        "--host_port", type=str, default="HOST:PORT", help="Host and port for LoRA operations"
+        "--host_port", '-hp',type=str, required=True, help="Host and port for the server format: host:port"
     )
     parser.add_argument(
         "--eager", action="store_true", help="Enable eager execution"
@@ -348,8 +330,7 @@ def get_args():
         type=str,
         help="List of LoRA modules in the format lora_name lora_module",
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 from speedy_utils import jloads, load_by_ext, memoize
 
 
@@ -424,9 +405,6 @@ def main():
                         model_name = model_name.replace("-bnb-4bit", "")
                     logger.info(f"Model name from LoRA config: {model_name}")
                     args.model = model_name
-            assert args.model, (
-                "Model name must be specified when using LoRA."
-            )
         
         # Fall back to existing logic for other cases (already specified lora_modules)
         if args.model is None and args.lora_modules is not None and not args.lora:
@@ -472,6 +450,11 @@ def main():
         else:
             lora_name = args.model
         unload_lora(lora_name, host_port=args.host_port)
-
+    elif args.mode == "list":
+        host_port = args.host_port
+        models = model_list(host_port)
+        print(f"Models: {models}")
+    else:
+        raise ValueError(f"Unknown mode: {args.mode}, ")
 if __name__ == "__main__":
     main()
