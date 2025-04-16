@@ -35,7 +35,6 @@ LORA_DIR = os.path.abspath(LORA_DIR)
 HF_HOME = os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
 logger.info(f"LORA_DIR: {LORA_DIR}")
 
-
 def get_vllm():
     """Finds the vLLM binary path."""
     try:
@@ -58,17 +57,20 @@ def model_list(host_port, api_key='abc'):
     try:
         client = openai.OpenAI(base_url=f"http://{host_port}/v1", api_key=api_key)
         models = client.models.list()
+        model_names = []
         if not models.data:
             print(f"No models found on http://{host_port}/v1")
             return
         print(f"Models available on http://{host_port}/v1:")
         for model in models:
             print(f"  - Model ID: {model.id}")
+            model_names.append(model.id)
+        return model_names
     except openai.APIConnectionError as e:
         logger.error(f"Could not connect to server at http://{host_port}/v1: {e}")
     except Exception as e:
         logger.error(f"An error occurred while listing models: {e}")
-
+    return []
 
 
 def add_lora(
@@ -86,7 +88,20 @@ def add_lora(
          logger.error(f"LoRA path does not exist: {lora_absolute_path}")
          return {"error": f"LoRA path does not exist: {lora_absolute_path}"}
 
-    # Construct the payload based on typical vLLM API (verify this)
+    
+    # check model list if the model exist then remove 
+    model_names = model_list(host_port)
+    if served_model_name in model_names:
+        logger.info(f"Model {served_model_name} already exist, removing it")
+        unload_lora(served_model_name, host_port)
+        time.sleep(2)
+    # if l:
+    #     for i in l:
+    #         if i['id'] == served_model_name:
+    #             logger.info(f"Model {served_model_name} already exist, removing it")
+    #             unload_lora(served_model_name, host_port)
+    #             break
+
     data = {
              "lora_name": served_model_name, # The name to refer to this LoRA by
              "lora_path": lora_absolute_path # Path on the server machine
@@ -146,9 +161,9 @@ def unload_lora(lora_name: str, host_port: str):
     url = f"http://{host_port}/v1/unload_lora_adapter"
     headers = {"Content-Type": "application/json"}
     data = {
-         "lora_request": {
+        #  "lora_request": {
              "lora_name": lora_name
-         }
+        #  }
          # Or maybe just {"lora_name": lora_name} - check docs
     }
 
