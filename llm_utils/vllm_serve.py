@@ -33,10 +33,10 @@ logger.info(f"LORA_DIR: {LORA_DIR}")
 
 
 def model_list(host_port, api_key='abc'):
-    client = openai.OpenAI(base_url=f"http://{host_port}", api_key=api_key)
-    models = client.Model.list()
-    print(f'Models: {models}')
-    return models
+    client = openai.OpenAI(base_url=f"http://{host_port}/v1", api_key=api_key)
+    models = client.models.list()
+    for model in models:
+        print(f"Model ID: {model.id}")
 
 def kill_existing_vllm(vllm_binary: Optional[str] = None) -> None:
     """Kill selected vLLM processes using fzf."""
@@ -444,16 +444,14 @@ def main():
             # Fallback to old behavior
             lora_name = args.model
             add_lora(lora_name, host_port=args.host_port, served_model_name=args.served_model_name)
-    elif args.mode == "unload-lora":
+    elif args.mode == "unload_lora":
         if args.lora:
             lora_name = args.lora[0]
         else:
             lora_name = args.model
         unload_lora(lora_name, host_port=args.host_port)
-    elif args.mode == "list":
-        host_port = args.host_port
-        models = model_list(host_port)
-        print(f"Models: {models}")
+    elif args.mode == "list_models":
+        model_list(args.host_port)
     else:
         raise ValueError(f"Unknown mode: {args.mode}, ")
 if __name__ == "__main__":
