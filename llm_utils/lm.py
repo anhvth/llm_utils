@@ -197,7 +197,7 @@ class OAI_LM(dspy.LM):
         model: str = None,
         model_type: Literal["chat", "text"] = "chat",
         temperature: float = 0.0,
-        max_tokens: int = 1000,
+        max_tokens: int = 2000,
         cache: bool = True,
         callbacks: Optional[Any] = None,
         num_retries: int = 3,
