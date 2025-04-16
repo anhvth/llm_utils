@@ -6,11 +6,11 @@ from copy import deepcopy
 from typing import Any, List, Literal, Optional, TypedDict
 
 import dspy
-import litellm
 import numpy as np
 from loguru import logger
 from pydantic import BaseModel
-from speedy_utils import dump_json_or_pickle, identify_uuid, load_json_or_pickle
+from speedy_utils import (dump_json_or_pickle, identify_uuid,
+                          load_json_or_pickle)
 
 
 class Message(TypedDict):
@@ -186,6 +186,9 @@ def _pick_least_used_port(ports: List[int]) -> int:
     return lsp
 
 
+
+
+
 class OAI_LM(dspy.LM):
     """
     A language model supporting chat or text completion requests for use with DSPy modules.
@@ -316,6 +319,8 @@ class OAI_LM(dspy.LM):
             id = identify_uuid(s)
             result = self.load_cache(id)
         if not result:
+            import litellm
+
             if self.ports and not port:
                 if use_loadbalance:
 

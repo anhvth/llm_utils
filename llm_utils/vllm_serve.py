@@ -5,9 +5,6 @@
 USAGE:
 Serve models and LoRAs with vLLM:
 
-Serve a LoRA model:
-svllm serve --lora LORA_NAME LORA_PATH --gpus GPU_GROUPS --host_port host:port
-
 Serve a base model:
 svllm serve --model MODEL_NAME --gpus GPU_GROUPS --host_port host:port
 
@@ -21,7 +18,6 @@ List models served on a specific host:port:
 svllm list_models --host_port host:port
 
 """
-
 from glob import glob
 import os
 import subprocess
@@ -34,7 +30,6 @@ import requests
 import openai
 from pyfzf.pyfzf import FzfPrompt # Added import for pyfzf
 from speedy_utils import jloads, load_by_ext, memoize # Assuming speedy_utils is available
-
 LORA_DIR = os.environ.get("LORA_DIR", "/loras")
 LORA_DIR = os.path.abspath(LORA_DIR)
 HF_HOME = os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
