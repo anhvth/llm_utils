@@ -9,7 +9,7 @@ authors = [
     {name = "Anh Vo"}
 ]
 description = "Utility functions for LLM applications"
-requires-python = ">3.5,<4.0"
+requires-python = ">=3.9,<4.0"
 dependencies = [
     "numpy",
     "pandas",
@@ -19,7 +19,8 @@ dependencies = [
     "langchain (>=0.3.20,<0.4.0)",
     "langchain-core (>=0.3.41,<0.4.0)",
     "langchain-openai (>=0.3.7,<0.4.0)",
-    "json-repair (>=0.40.0,<0.41.0)"
+    "json-repair (>=0.40.0,<0.41.0)",
+    "modin (==0.32.0)"
 ]
 
 [project.scripts]
