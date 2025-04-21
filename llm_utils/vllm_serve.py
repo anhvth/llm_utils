@@ -314,7 +314,7 @@ def get_args():
     #     help="Additional arguments for the serve command",
     # )
     parser.add_argument(
-        "--host_port", '-hp',type=str, required=True, help="Host and port for the server format: host:port"
+        "--host_port", '-hp',type=str, default='localhost:8150', help="Host and port for the server format: host:port"
     )
     parser.add_argument(
         "--eager", action="store_true", help="Enable eager execution"
@@ -418,12 +418,13 @@ def main():
                     model_name = model_name.replace("-bnb-4bit", "")
                 logger.info(f"Model name from LoRA config: {model_name}")
                 args.model = model_name
-
+        # port_start from hostport
+        port_start = int(args.host_port.split(":")[-1])
         serve(
             args.model,
             args.gpu_groups,
             args.served_model_name,
-            args.port_start,
+            port_start,
             args.gpu_memory_utilization,
             args.dtype,
             args.max_model_len,
