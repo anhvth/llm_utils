@@ -1,7 +1,7 @@
 import random
 
 import numpy as np
-import modin.pandas as pd
+import pandas as pd
 from tabulate import tabulate
 from transformers import AutoTokenizer
 
