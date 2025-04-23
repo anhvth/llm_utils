@@ -295,9 +295,10 @@ class OAI_LM:
         use_loadbalance=None,
         must_load_cache=False,
         max_tokens=None,
+        num_retries=10,
         **kwargs,
     ) -> str | BaseModel:
-        if retry_count > self.kwargs.get("num_retries", 3):
+        if retry_count > num_retries:
             # raise ValueError("Retry limit exceeded")
             logger.error(f"Retry limit exceeded, error: {error}, {self.base_url=}")
             raise error
@@ -356,6 +357,7 @@ class OAI_LM:
             except litellm.exceptions.ContextWindowExceededError as e:
                 logger.error(f"Context window exceeded: {e}")
             except litellm.exceptions.APIError as e:
+                time.sleep(10 * retry_count + 1)
                 return self.__call__(
                     prompt=prompt,
                     messages=messages,
@@ -367,7 +369,7 @@ class OAI_LM:
                     **kwargs,
                 )
             except litellm.exceptions.Timeout as e:
-                time.sleep(5 * retry_count + 1)
+                time.sleep(10 * retry_count + 1)
                 return self.__call__(
                     prompt=prompt,
                     messages=messages,
