@@ -5,7 +5,7 @@ import tempfile
 from copy import deepcopy
 from typing import Any, List, Literal, Optional, TypedDict
 
-import dspy
+
 import numpy as np
 from loguru import logger
 from pydantic import BaseModel
@@ -194,7 +194,7 @@ def _pick_least_used_port(ports: List[int]) -> int:
 
 
 
-
+import dspy
 
 class OAI_LM(dspy.LM):
     """
@@ -219,10 +219,8 @@ class OAI_LM(dspy.LM):
         api_key=None,
         **kwargs,
     ):
-        import openai
-
-        version = openai.__version__  # str value "1.70.0"
-        assert version >= "1.70.0", f"OpenAI version must be >= 1.70.0, got {version}"
+        # is instance of import dspy.LM
+        
         self.ports = ports
         self.host = host
         if ports is not None:

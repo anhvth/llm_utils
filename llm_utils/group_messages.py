@@ -3,7 +3,6 @@ import random
 import numpy as np
 import pandas as pd
 from tabulate import tabulate
-from transformers import AutoTokenizer
 
 from speedy_utils import multi_thread
 
@@ -75,7 +74,7 @@ def group_messages_by_len(
     """
     if messages is None:
         raise ValueError("messages parameter cannot be None")
-
+    from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
     def create_batches(messages):
