@@ -3,5 +3,5 @@ if ! bump2version --allow-dirty patch; then
     exit 1
 fi
 
-git add -A && git commit -m "Bumped version"
+git add -A && git commit -m "Bumped version to $(bump2version --dry-run --list patch | grep new_version | cut -d'=' -f2 | xargs)"
 git push
