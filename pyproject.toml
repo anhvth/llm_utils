@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "llm_utils"
-version = "0.1.7"
+version = "0.1.8"
 description = "Utility functions for LLM applications"
 authors = ["Anh Vo"]
 readme = "README.md"
