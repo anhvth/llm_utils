@@ -3,12 +3,11 @@ name: Publish to PyPI
 on:
   push:
     branches:
-      - master
+      - main
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    if: startsWith(github.event.head_commit.message, 'Bump version')  # Add this line
 
     steps:
     - name: Checkout code
