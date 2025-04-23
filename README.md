@@ -19,7 +19,7 @@ LLM Utils is a collection of utility functions and classes designed to simplify 
 
 ```bash
 # Install from PyPI
-pip install pyllm_utils
+pip install speedy_llm_utils
 
 # Install from source
 pip install -e .
@@ -28,7 +28,7 @@ pip install -e .
 poetry install
 ```
 
-Note: While the package is named `pyllm_utils` on PyPI, you still import it as `llm_utils` in your code:
+Note: While the package is named `speedy_llm_utils` on PyPI, you still import it as `llm_utils` in your code:
 
 ```python
 import llm_utils
