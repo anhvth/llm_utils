@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Get the current version before making any changes
-CURRENT_VERSION=$(bump2version --dry-run --list patch | grep current_version | cut -d'=' -f2 | xargs)
-NEW_VERSION=$(bump2version --dry-run --list patch | grep new_version | cut -d'=' -f2 | xargs)
+CURRENT_VERSION=$(bump2version --dry-run --list patch --allow-dirty | grep current_version | cut -d'=' -f2 | xargs)
+NEW_VERSION=$(bump2version --dry-run --list patch --allow-dirty | grep new_version | cut -d'=' -f2 | xargs)
 
 echo "Attempting to bump version from $CURRENT_VERSION to $NEW_VERSION..."
 
