@@ -194,9 +194,7 @@ def _pick_least_used_port(ports: List[int]) -> int:
 
 
 
-import dspy
-
-class OAI_LM(dspy.LM):
+class OAI_LM:
     """
     A language model supporting chat or text completion requests for use with DSPy modules.
     """
@@ -219,7 +217,8 @@ class OAI_LM(dspy.LM):
         api_key=None,
         **kwargs,
     ):
-        # is instance of import dspy.LM
+        # Lazy import dspy
+        import dspy
         
         self.ports = ports
         self.host = host
@@ -238,7 +237,8 @@ class OAI_LM(dspy.LM):
         if not model.startswith("openai/"):
             model = f"openai/{model}"
         try:
-            super().__init__(
+            # Create a dspy.LM instance instead of inheriting
+            self._dspy_lm = dspy.LM(
                 model=model,
                 model_type=model_type,
                 temperature=temperature,
@@ -252,6 +252,9 @@ class OAI_LM(dspy.LM):
                 api_key=api_key or os.getenv("OPENAI_API_KEY", "abc"),
                 **kwargs,
             )
+            # Store the kwargs for later use
+            self.kwargs = self._dspy_lm.kwargs
+            self.model = self._dspy_lm.model
         except Exception as e:
             is_error = "LLM Provider NOT provided" in str(e)
             if is_error:
@@ -277,7 +280,7 @@ class OAI_LM(dspy.LM):
 
     @property
     def last_message(self):
-        return self.history[-1]["response"].model_dump()["choices"][0]["message"]
+        return self._dspy_lm.history[-1]["response"].model_dump()["choices"][0]["message"]
 
     def __call__(
         self,
@@ -340,7 +343,8 @@ class OAI_LM(dspy.LM):
                     raise ValueError(
                         "Expected to load from cache but got None, maybe previous call failed so it didn't save to cache"
                     )
-                result = super().__call__(
+                # Use the _dspy_lm instance instead of super()
+                result = self._dspy_lm(
                     prompt=prompt,
                     messages=messages,
                     **kwargs,
@@ -455,6 +459,15 @@ class OAI_LM(dspy.LM):
             base_url=self.kwargs["base_url"], api_key=os.getenv("OPENAI_API_KEY", "abc")
         )
 
+    def __getattr__(self, name):
+        """
+        Delegate any attributes not found in OAI_LM to the underlying dspy.LM instance.
+        This makes sure any dspy.LM methods not explicitly defined in OAI_LM are still accessible.
+        """
+        if hasattr(self, '_dspy_lm') and hasattr(self._dspy_lm, name):
+            return getattr(self._dspy_lm, name)
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+    
     @classmethod
     def get_deepseek_chat(self, api_key=None, max_tokens=2000, **kwargs):
         return OAI_LM(

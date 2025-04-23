@@ -16,7 +16,12 @@ if [ -n "$(git status --porcelain)" ]; then
     read -p "Do you want to commit these changes now? (y/n): " choice
     if [[ "$choice" == [Yy]* ]]; then
         echo "Committing pending changes..."
-        git add -A && git commit -m "Pre-release commit" || { echo "Commit failed"; exit 1; }
+        read -p "Enter a commit message: " commit_message
+        if [ -z "$commit_message" ]; then
+            echo "No commit message entered. Aborting."
+            exit 1
+        fi
+        git add -A && git commit -m "$commit_message" || { echo "Commit failed"; exit 1; }
     else
         echo "Aborting version bump. Please clean your working directory first."
         exit 1
