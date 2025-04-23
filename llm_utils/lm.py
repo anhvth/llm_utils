@@ -3,14 +3,14 @@ import os
 import random
 import tempfile
 from copy import deepcopy
+import time
 from typing import Any, List, Literal, Optional, TypedDict
 
 
 import numpy as np
 from loguru import logger
 from pydantic import BaseModel
-from speedy_utils import (dump_json_or_pickle, identify_uuid,
-                          load_json_or_pickle)
+from speedy_utils import dump_json_or_pickle, identify_uuid, load_json_or_pickle
 
 
 class Message(TypedDict):
@@ -61,7 +61,7 @@ class ChatSession:
         if self.callback:
             self.callback(self, output)
         return output
-    
+
     def send_message(self, text, **kwargs):
         """
         Wrapper around __call__ method for sending messages.
@@ -193,7 +193,6 @@ def _pick_least_used_port(ports: List[int]) -> int:
     return lsp
 
 
-
 class OAI_LM:
     """
     A language model supporting chat or text completion requests for use with DSPy modules.
@@ -219,7 +218,7 @@ class OAI_LM:
     ):
         # Lazy import dspy
         import dspy
-        
+
         self.ports = ports
         self.host = host
         if ports is not None:
@@ -280,7 +279,9 @@ class OAI_LM:
 
     @property
     def last_message(self):
-        return self._dspy_lm.history[-1]["response"].model_dump()["choices"][0]["message"]
+        return self._dspy_lm.history[-1]["response"].model_dump()["choices"][0][
+            "message"
+        ]
 
     def __call__(
         self,
@@ -355,6 +356,18 @@ class OAI_LM:
             except litellm.exceptions.ContextWindowExceededError as e:
                 logger.error(f"Context window exceeded: {e}")
             except litellm.exceptions.APIError as e:
+                return self.__call__(
+                    prompt=prompt,
+                    messages=messages,
+                    response_format=response_format,
+                    cache=cache,
+                    retry_count=retry_count + 1,
+                    port=port,
+                    error=e,
+                    **kwargs,
+                )
+            except litellm.exceptions.Timeout as e:
+                time.sleep(5 * retry_count + 1)
                 return self.__call__(
                     prompt=prompt,
                     messages=messages,
@@ -464,10 +477,12 @@ class OAI_LM:
         Delegate any attributes not found in OAI_LM to the underlying dspy.LM instance.
         This makes sure any dspy.LM methods not explicitly defined in OAI_LM are still accessible.
         """
-        if hasattr(self, '_dspy_lm') and hasattr(self._dspy_lm, name):
+        if hasattr(self, "_dspy_lm") and hasattr(self._dspy_lm, name):
             return getattr(self._dspy_lm, name)
-        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
-    
+        raise AttributeError(
+            f"'{self.__class__.__name__}' object has no attribute '{name}'"
+        )
+
     @classmethod
     def get_deepseek_chat(self, api_key=None, max_tokens=2000, **kwargs):
         return OAI_LM(
