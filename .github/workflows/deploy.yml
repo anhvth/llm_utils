@@ -32,8 +32,8 @@ jobs:
     - name: Build and publish package to PyPI
       env:
         TWINE_USERNAME: "__token__"
-        PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
       run: |
         rm -rf dist/ build/ *.egg-info
         poetry build
-        twine upload dist/* -p $PYPI_API_TOKEN --non-interactive
+        twine upload dist/* --non-interactive
