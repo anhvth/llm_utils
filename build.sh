@@ -10,8 +10,8 @@ echo "Attempting to bump version from $CURRENT_VERSION to $NEW_VERSION..."
 echo "Committing any pending changes..."
 git add -A && git commit -m "Pre-release commit" || echo "No changes to commit or commit failed"
 
-# Now bump the version (working directory should be clean)
-if ! bump2version patch; then
+# Now bump the version (allow dirty working directory)
+if ! bump2version patch --allow-dirty; then
     echo "Error: bump2version failed"
     exit 1
 fi
