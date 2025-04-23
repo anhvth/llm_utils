@@ -214,6 +214,7 @@ class OAI_LM:
         port=None,
         ports=None,
         api_key=None,
+        disable_history: bool = False,
         **kwargs,
     ):
         # Lazy import dspy
@@ -237,6 +238,9 @@ class OAI_LM:
             model = f"openai/{model}"
         try:
             # Create a dspy.LM instance instead of inheriting
+            import dspy
+            if disable_history:
+                dspy.settings.disable_history = True
             self._dspy_lm = dspy.LM(
                 model=model,
                 model_type=model_type,
