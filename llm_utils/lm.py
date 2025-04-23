@@ -61,6 +61,13 @@ class ChatSession:
         if self.callback:
             self.callback(self, output)
         return output
+    
+    def send_message(self, text, **kwargs):
+        """
+        Wrapper around __call__ method for sending messages.
+        This maintains compatibility with the test suite.
+        """
+        return self.__call__(text, **kwargs)
 
     def parse_history(self, indent=None):
         parsed_history = []

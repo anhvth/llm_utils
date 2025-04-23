@@ -6,8 +6,9 @@ description = "Utility functions for LLM applications"
 authors = ["Anh Vo"]
 readme = "README.md"
 homepage = "https://github.com/anhvth/llm_utils"
-
-
+packages = [
+    {include = "llm_utils"}
+]
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
