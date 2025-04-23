@@ -29,9 +29,6 @@ if ! bump2version patch; then
     exit 1
 fi
 
-echo "Successfully bumped version to $NEW_VERSION"
 
-# Push the changes and tag to remote
-git push && git push --tags
-
-echo "Successfully pushed version $NEW_VERSION to GitHub"
+git add -A && git commit -m "Bumped version to $NEW_VERSION" || { echo "Commit failed"; exit 1; }
+git push
