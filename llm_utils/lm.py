@@ -361,6 +361,7 @@ class OAI_LM:
             except litellm.exceptions.ContextWindowExceededError as e:
                 logger.error(f"Context window exceeded: {e}")
             except litellm.exceptions.APIError as e:
+                logger.error(f"API error: {str(e)[:100]}, will sleep for {retry_count} seconds and retry")
                 time.sleep(10 * retry_count + 1)
                 return self.__call__(
                     prompt=prompt,
@@ -373,6 +374,7 @@ class OAI_LM:
                     **kwargs,
                 )
             except litellm.exceptions.Timeout as e:
+                logger.error(f"Timeout error: {str(e)[:100]}, will sleep for {retry_count} seconds and retry")
                 time.sleep(10 * retry_count + 1)
                 return self.__call__(
                     prompt=prompt,
