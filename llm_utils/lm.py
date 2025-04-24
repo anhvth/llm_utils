@@ -236,8 +236,6 @@ class OAI_LM:
         if not model.startswith("openai/"):
             model = f"openai/{model}"
 
-
-        
         self._dspy_lm = dspy.LM(
             model=model,
             model_type=model_type,
@@ -358,9 +356,10 @@ class OAI_LM:
             except litellm.exceptions.ContextWindowExceededError as e:
                 logger.error(f"Context window exceeded: {e}")
             except litellm.exceptions.APIError as e:
-                t = 10 * retry_count + 1
+                t = 10 * (random.randint(0, 10) + 1)
+                base_url = kwargs["base_url"]
                 logger.warning(
-                    f"API error: {str(e)[:100]}, will sleep for {t}s and retry"
+                    f"[{base_url}=] API error: {str(e)[:100]}, will sleep for {t}s and retry"
                 )
                 time.sleep(t)
                 return self.__call__(
@@ -390,7 +389,9 @@ class OAI_LM:
                 )
             except Exception as e:
                 logger.error(f"Error: {e}")
-                import traceback; traceback.print_exc()
+                import traceback
+
+                traceback.print_exc()
                 raise
             finally:
                 if port and use_loadbalance:
@@ -488,7 +489,7 @@ class OAI_LM:
         Delegate any attributes not found in OAI_LM to the underlying dspy.LM instance.
         This makes sure any dspy.LM methods not explicitly defined in OAI_LM are still accessible.
         """
-        
+
         if hasattr(self, "_dspy_lm") and hasattr(self._dspy_lm, name):
             return getattr(self._dspy_lm, name)
         raise AttributeError(
@@ -517,5 +518,3 @@ class OAI_LM:
 
     # set get_agent is get_session
     get_agent = get_session
-
-
