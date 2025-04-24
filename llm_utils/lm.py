@@ -229,14 +229,26 @@ class OAI_LM:
             self.base_url = kwargs["base_url"]
 
         if model is None:
-            model = self.list_models(kwargs.get("base_url"))[0]
-            model = f"openai/{model}"
-            logger.info(f"Using default model: {model}")
+            try:
+                model = self.list_models(kwargs.get("base_url"))[0]
+                model = f"openai/{model}"
+                logger.info(f"Using default model: {model}")
+            except Exception as e:
+                example_cmd = (
+                    "LM.start_server('unsloth/gemma-3-1b-it')\n"
+                    "# Or manually run: svllm serve --model unsloth/gemma-3-1b-it --gpus 0 -hp localhost:9150"
+                )
+                logger.error(
+                    f"Failed to initialize dspy.LM: {e}\n"
+                    f"Make sure your model server is running and accessible.\n"
+                    f"Example to start a server:\n{example_cmd}"
+                )
+        assert model is not None, "Model name must be provided"
 
         if not model.startswith("openai/"):
             model = f"openai/{model}"
 
-        self._dspy_lm = dspy.LM(
+        self._dspy_lm: dspy.LM = dspy.LM(
             model=model,
             model_type=model_type,
             temperature=temperature,
@@ -253,28 +265,9 @@ class OAI_LM:
         # Store the kwargs for later use
         self.kwargs = self._dspy_lm.kwargs
         self.model = self._dspy_lm.model
-        # except Exception as e:
-        #     is_error = "LLM Provider NOT provided" in str(e)
-        #     if is_error:
-        #         # try adding openai/ prefix
-        #         return OAI_LM(
-        #             model=f"openai/{model}",
-        #             model_type=model_type,
-        #             temperature=temperature,
-        #             max_tokens=max_tokens,
-        #             cache=cache,
-        #             callbacks=callbacks,
-        #             num_retries=num_retries,
-        #             provider=provider,
-        #             finetuning_model=finetuning_model,
-        #             launch_kwargs=launch_kwargs,
-        #             host=host,
-        #             port=port,
-        #             api_key=api_key or os.getenv("OPENAI_API_KEY", "abc"),
-        #             **kwargs,
-        #         )
 
         self.do_cache = cache
+
 
     @property
     def last_message(self):
@@ -489,8 +482,8 @@ class OAI_LM:
         Delegate any attributes not found in OAI_LM to the underlying dspy.LM instance.
         This makes sure any dspy.LM methods not explicitly defined in OAI_LM are still accessible.
         """
-
-        if hasattr(self, "_dspy_lm") and hasattr(self._dspy_lm, name):
+        # Check __dict__ directly to avoid recursion via hasattr
+        if "_dspy_lm" in self.__dict__ and hasattr(self._dspy_lm, name):
             return getattr(self._dspy_lm, name)
         raise AttributeError(
             f"'{self.__class__.__name__}' object has no attribute '{name}'"
@@ -516,5 +509,30 @@ class OAI_LM:
             **kwargs,
         )
 
+    @staticmethod
+    def start_server(model_name, gpus="4567", port=9150, eager=True):
+        cmd = f"svllm serve --model {model_name} --gpus {gpus} -hp localhost:{port}"
+        if eager:
+            cmd += " --eager"
+        session_name = f"vllm_{port}"
+        is_session_exists = os.system(f"tmux has-session -t {session_name}")
+        logger.info(f"Starting server with command: {cmd}")
+        if is_session_exists == 0:
+            logger.warning(
+                f"Session {session_name} exists, please kill it before running the script"
+            )
+            # as user if they want to kill the session
+            user_input = input(
+                f"Session {session_name} exists, do you want to kill it? (y/n): "
+            )
+            if user_input.lower() == "y":
+                os.system(f"tmux kill-session -t {session_name}")
+                logger.info(f"Session {session_name} killed")
+        os.system(cmd)
+        # return subprocess.Popen(shlex.split(cmd))
+
     # set get_agent is get_session
     get_agent = get_session
+
+
+LM = OAI_LM
