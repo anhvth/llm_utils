@@ -214,7 +214,6 @@ class OAI_LM:
         port=None,
         ports=None,
         api_key=None,
-        disable_history: bool = False,
         **kwargs,
     ):
         # Lazy import dspy
@@ -236,48 +235,46 @@ class OAI_LM:
 
         if not model.startswith("openai/"):
             model = f"openai/{model}"
-        try:
-            # Create a dspy.LM instance instead of inheriting
-            import dspy
-            if disable_history:
-                dspy.settings.disable_history = True
-            self._dspy_lm = dspy.LM(
-                model=model,
-                model_type=model_type,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                cache=False,  # disable cache handling by default and implement custom cache handling
-                callbacks=callbacks,
-                num_retries=num_retries,
-                provider=provider,
-                finetuning_model=finetuning_model,
-                launch_kwargs=launch_kwargs,
-                api_key=api_key or os.getenv("OPENAI_API_KEY", "abc"),
-                **kwargs,
-            )
-            # Store the kwargs for later use
-            self.kwargs = self._dspy_lm.kwargs
-            self.model = self._dspy_lm.model
-        except Exception as e:
-            is_error = "LLM Provider NOT provided" in str(e)
-            if is_error:
-                # try adding openai/ prefix
-                return OAI_LM(
-                    model=f"openai/{model}",
-                    model_type=model_type,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    cache=cache,
-                    callbacks=callbacks,
-                    num_retries=num_retries,
-                    provider=provider,
-                    finetuning_model=finetuning_model,
-                    launch_kwargs=launch_kwargs,
-                    host=host,
-                    port=port,
-                    api_key=api_key or os.getenv("OPENAI_API_KEY", "abc"),
-                    **kwargs,
-                )
+
+
+        
+        self._dspy_lm = dspy.LM(
+            model=model,
+            model_type=model_type,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            cache=False,  # disable cache handling by default and implement custom cache handling
+            callbacks=callbacks,
+            num_retries=num_retries,
+            provider=provider,
+            finetuning_model=finetuning_model,
+            launch_kwargs=launch_kwargs,
+            api_key=api_key or os.getenv("OPENAI_API_KEY", "abc"),
+            **kwargs,
+        )
+        # Store the kwargs for later use
+        self.kwargs = self._dspy_lm.kwargs
+        self.model = self._dspy_lm.model
+        # except Exception as e:
+        #     is_error = "LLM Provider NOT provided" in str(e)
+        #     if is_error:
+        #         # try adding openai/ prefix
+        #         return OAI_LM(
+        #             model=f"openai/{model}",
+        #             model_type=model_type,
+        #             temperature=temperature,
+        #             max_tokens=max_tokens,
+        #             cache=cache,
+        #             callbacks=callbacks,
+        #             num_retries=num_retries,
+        #             provider=provider,
+        #             finetuning_model=finetuning_model,
+        #             launch_kwargs=launch_kwargs,
+        #             host=host,
+        #             port=port,
+        #             api_key=api_key or os.getenv("OPENAI_API_KEY", "abc"),
+        #             **kwargs,
+        #         )
 
         self.do_cache = cache
 
@@ -361,8 +358,11 @@ class OAI_LM:
             except litellm.exceptions.ContextWindowExceededError as e:
                 logger.error(f"Context window exceeded: {e}")
             except litellm.exceptions.APIError as e:
-                logger.error(f"API error: {str(e)[:100]}, will sleep for {retry_count} seconds and retry")
-                time.sleep(10 * retry_count + 1)
+                t = 10 * retry_count + 1
+                logger.warning(
+                    f"API error: {str(e)[:100]}, will sleep for {t}s and retry"
+                )
+                time.sleep(t)
                 return self.__call__(
                     prompt=prompt,
                     messages=messages,
@@ -374,7 +374,9 @@ class OAI_LM:
                     **kwargs,
                 )
             except litellm.exceptions.Timeout as e:
-                logger.error(f"Timeout error: {str(e)[:100]}, will sleep for {retry_count} seconds and retry")
+                logger.error(
+                    f"Timeout error: {str(e)[:100]}, will sleep for {retry_count} seconds and retry"
+                )
                 time.sleep(10 * retry_count + 1)
                 return self.__call__(
                     prompt=prompt,
@@ -388,6 +390,7 @@ class OAI_LM:
                 )
             except Exception as e:
                 logger.error(f"Error: {e}")
+                import traceback; traceback.print_exc()
                 raise
             finally:
                 if port and use_loadbalance:
@@ -485,6 +488,7 @@ class OAI_LM:
         Delegate any attributes not found in OAI_LM to the underlying dspy.LM instance.
         This makes sure any dspy.LM methods not explicitly defined in OAI_LM are still accessible.
         """
+        
         if hasattr(self, "_dspy_lm") and hasattr(self._dspy_lm, name):
             return getattr(self._dspy_lm, name)
         raise AttributeError(
@@ -510,3 +514,8 @@ class OAI_LM:
             max_tokens=max_tokens,
             **kwargs,
         )
+
+    # set get_agent is get_session
+    get_agent = get_session
+
+
