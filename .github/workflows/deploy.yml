@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    # Only run on commits starting with "Bump version"
+    if: startsWith(github.event.head_commit.message, 'Bump version')
 
 jobs:
   publish:
