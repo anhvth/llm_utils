@@ -295,7 +295,8 @@ class OAI_LM:
             logger.error(f"Retry limit exceeded, error: {error}, {self.base_url=}")
             raise error
         # have multiple ports, and port is not specified
-
+        if not kwargs:
+            kwargs = self.kwargs
         id = None
         cache = cache or self.do_cache
         if max_tokens is not None:
@@ -329,9 +330,10 @@ class OAI_LM:
                     port = self.get_least_used_port()
                 else:
                     port = random.choice(self.ports)
-
+            
             if port:
                 kwargs["base_url"] = f"http://{self.host}:{port}/v1"
+                
             try:
                 if must_load_cache:
                     raise ValueError(
@@ -352,7 +354,7 @@ class OAI_LM:
                 t = 10 * (random.randint(0, 10) + 1)
                 base_url = kwargs["base_url"]
                 logger.warning(
-                    f"[{base_url}=] API error: {str(e)[:100]}, will sleep for {t}s and retry"
+                    f"[{base_url=}] API error: {str(e)[:100]}, will sleep for {t}s and retry"
                 )
                 time.sleep(t)
                 return self.__call__(
