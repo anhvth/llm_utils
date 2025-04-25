@@ -268,7 +268,6 @@ class OAI_LM:
 
         self.do_cache = cache
 
-
     @property
     def last_message(self):
         return self._dspy_lm.history[-1]["response"].model_dump()["choices"][0][
@@ -330,10 +329,10 @@ class OAI_LM:
                     port = self.get_least_used_port()
                 else:
                     port = random.choice(self.ports)
-            
+
             if port:
                 kwargs["base_url"] = f"http://{self.host}:{port}/v1"
-                
+
             try:
                 if must_load_cache:
                     raise ValueError(
@@ -353,9 +352,10 @@ class OAI_LM:
             except litellm.exceptions.APIError as e:
                 t = 10 * (random.randint(0, 10) + 1)
                 base_url = kwargs["base_url"]
-                logger.warning(
-                    f"[{base_url=}] API error: {str(e)[:100]}, will sleep for {t}s and retry"
-                )
+                if retry_count > 0:
+                    logger.warning(
+                        f"[{base_url=}] API error: {str(e)[:100]}, will sleep for {t}s and retry"
+                    )
                 time.sleep(t)
                 return self.__call__(
                     prompt=prompt,
@@ -368,10 +368,12 @@ class OAI_LM:
                     **kwargs,
                 )
             except litellm.exceptions.Timeout as e:
-                logger.error(
-                    f"Timeout error: {str(e)[:100]}, will sleep for {retry_count} seconds and retry"
-                )
-                time.sleep(10 * retry_count + 1)
+                t = 10 * retry_count + 1
+                if retry_count > 0:
+                    logger.warning(
+                        f"Timeout error: {str(e)[:100]}, will sleep for {t} seconds and retry"
+                    )
+                time.sleep(t)
                 return self.__call__(
                     prompt=prompt,
                     messages=messages,
