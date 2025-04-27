@@ -350,7 +350,7 @@ class OAI_LM:
             except litellm.exceptions.ContextWindowExceededError as e:
                 logger.error(f"Context window exceeded: {e}")
             except litellm.exceptions.APIError as e:
-                t = 10 * (random.randint(0, 10) + 1)
+                t = 3
                 base_url = kwargs["base_url"]
                 if retry_count > 0:
                     logger.warning(
@@ -368,7 +368,7 @@ class OAI_LM:
                     **kwargs,
                 )
             except litellm.exceptions.Timeout as e:
-                t = 10 * retry_count + 1
+                t = 3
                 if retry_count > 0:
                     logger.warning(
                         f"Timeout error: {str(e)[:100]}, will sleep for {t} seconds and retry"
