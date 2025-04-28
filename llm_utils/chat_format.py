@@ -1,7 +1,7 @@
 from copy import deepcopy
-from typing import Dict, List, Union
+from typing import Dict, List
 
-from IPython.display import HTML, Markdown, display
+from IPython.display import HTML, display
 from loguru import logger
 
 
@@ -150,7 +150,6 @@ def transform_messages_to_chatml(input_data, input_format="auto"):
     return input_data
 
 
-from typing import Literal
 
 
 def display_chat_messages_as_html(
