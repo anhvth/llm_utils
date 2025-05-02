@@ -42,7 +42,7 @@ class ChatSession:
         return len(self.history)
 
     def __call__(
-        self, text, response_format=None, display=True, max_prev_turns=3, **kwargs
+        self, text, response_format=None, display=False, max_prev_turns=3, **kwargs
     ) -> str | BaseModel:
         response_format = response_format or self.response_format
         self.history.append({"role": "user", "content": text})
