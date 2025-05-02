@@ -253,7 +253,6 @@ class OAI_LM:
             model_type=model_type,
             temperature=temperature,
             max_tokens=max_tokens,
-            cache=False,  # disable cache handling by default and implement custom cache handling
             callbacks=callbacks,
             num_retries=num_retries,
             provider=provider,
@@ -269,7 +268,7 @@ class OAI_LM:
         self.do_cache = cache
 
     @property
-    def last_message(self):
+    def last_response(self):
         return self._dspy_lm.history[-1]["response"].model_dump()["choices"][0][
             "message"
         ]
@@ -291,12 +290,14 @@ class OAI_LM:
     ) -> str | BaseModel:
         if retry_count > num_retries:
             # raise ValueError("Retry limit exceeded")
-            logger.error(f"Retry limit exceeded, error: {error}, {self.base_url=}")
+            logger.error(f"Retry limit exceeded, error: {error}")
             raise error
         # have multiple ports, and port is not specified
         if not kwargs:
             kwargs = self.kwargs
         id = None
+        if cache is None:
+            cache = self.do_cache
         cache = cache or self.do_cache
         if max_tokens is not None:
             kwargs["max_tokens"] = max_tokens
