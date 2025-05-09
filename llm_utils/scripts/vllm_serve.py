@@ -315,7 +315,7 @@ def get_args():
         "--max_model_len", type=int, default=8192, help="Maximum model length"
     )
     parser.add_argument(
-        "--disable_lora",
+        "--no-lora",
         dest="enable_lora",
         action="store_false",
         help="Disable LoRA support",
